@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import { isObject } from "lodash";
 
-export function bnLayoutFormatter(obj: any) {
+export function plaintextFormatter(obj: any) {
   for (const key in obj) {
     if (obj[key]?.constructor?.name === "PublicKey") {
       obj[key] = (obj[key] as PublicKey).toBase58();
@@ -12,9 +12,8 @@ export function bnLayoutFormatter(obj: any) {
     } else if (obj[key]?.constructor?.name === "Buffer") {
       obj[key] = (obj[key] as Buffer).toString("base64");
     } else if (isObject(obj[key])) {
-      bnLayoutFormatter(obj[key]);
-    } else {
-      obj[key] = obj[key];
-    }
+      plaintextFormatter(obj[key]);
+    } 
   }
+  return obj;
 }

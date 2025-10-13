@@ -31,7 +31,7 @@ import { IdlField as SerumIdlField } from "@project-serum/anchor/dist/cjs/idl";
 import { intersection } from "lodash";
 
 import { serializeStruct } from "../utils/account-formatter";
-import { bnLayoutFormatter } from "../utils/bn-layout-formatter";
+import { plaintextFormatter } from "../utils/common";
 
 type AnyIdl = CoralIdl | SerumIdl;
 
@@ -59,7 +59,7 @@ export type AccountInfo = {
     rentEpoch?: number;
 }
 
-type ParserParams = {
+export type ParserParams = {
     programId: string;
     idl: CoralIdl | SerumIdl;
     isCoral: boolean;
@@ -73,7 +73,7 @@ export class Parser {
     solanaDataParsers: Map<string, ParserParams> = new Map();
     // accountParsers: Map<string, ParserParams> = new Map();
 
-    addParser(programId: PublicKey, idl: CoralIdl | SerumIdl) {
+    addIDL(programId: PublicKey, idl: CoralIdl | SerumIdl) {
         // this.transactionParsers.set(programId.toBase58(), { programId, idl, isCoral: TransactionParser.isCoralIdl(idl), coder: this.coder });
         let parserParams: any = {
             programId,
@@ -285,7 +285,6 @@ export class Parser {
     }
 
     parseTransaction(tx: VersionedTransactionResponse) {
-        console.log("Version of this TX: ", tx.version);
         const allKeys = this.getAccountKeys(tx.transaction.message, tx.meta);
         const parsedCompiledInstruction = this.getParsedCompiledInstruction(
             tx.transaction.message.compiledInstructions,
@@ -295,9 +294,7 @@ export class Parser {
             tx.meta?.innerInstructions,
             allKeys
         );
-      
         const parsedEvents = this.parseEvents(tx, allKeys);
-
         if(tx.version === "legacy") {
             const txWithParsed = {
                 ...tx,
@@ -306,7 +303,7 @@ export class Parser {
                     message: {
                         ...tx.transaction.message,
                         instructions: parsedCompiledInstruction,
-                        events: parsedEvents
+                        events: plaintextFormatter(parsedEvents)
                     },
                 },
                 meta: {
@@ -324,7 +321,7 @@ export class Parser {
                 message: {
                     ...tx.transaction.message,
                     compiledInstructions: parsedCompiledInstruction,
-                    events: parsedEvents
+                    events: plaintextFormatter(parsedEvents)
                 },
             },
             meta: {

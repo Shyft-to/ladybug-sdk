@@ -3,11 +3,7 @@ import {
   SubscribeRequest,
 } from "@triton-one/yellowstone-grpc";
 import Client from "@triton-one/yellowstone-grpc";
-import { TransactionParser } from "../TransactionParsers/TransactionParser";
 import { Parser } from "../Parsers/Parser";
-import { PublicKey } from "@solana/web3.js";
-import { Idl as CoralIdl } from "@coral-xyz/anchor";
-import { Idl as SerumIdl } from "@project-serum/anchor";
 
 export class TransactionStreamer {
   private client: Client;
@@ -15,7 +11,7 @@ export class TransactionStreamer {
   private addresses: Set<string> = new Set();
   private running: boolean = false;
   private stream?: any;
-  private parsers = new Parser();
+  private parser: Parser | undefined = undefined;
   
   private onDataCallback?: (data: any) => void;
   private onErrorCallback?: (err: any) => void;
@@ -93,8 +89,8 @@ export class TransactionStreamer {
     await this.pushUpdate();
   }
 
-  async addParser(programId: PublicKey, idl: CoralIdl | SerumIdl) {
-    this.parsers.addParser(programId, idl);
+  async addParser(parser: Parser) {
+    this.parser = parser;
   }
 
   async start() {
@@ -140,12 +136,17 @@ export class TransactionStreamer {
      this.stream.on("data", (data: any) => {
       if (this.onDataCallback) {
         try {
+          
           if (data.transaction) {
-            const formatted = this.parsers.formatGrpcTransactionData(
+            if(this.parser === undefined) {
+              this.onDataCallback(data);
+              return;
+            }
+            const formatted = this.parser.formatGrpcTransactionData(
               data.transaction,
               Date.now()
             );
-            const parsed = this.parsers.parseTransaction(formatted);
+            const parsed = this.parser.parseTransaction(formatted);
             this.onDataCallback(parsed);
           } else {
             this.onDataCallback(data);

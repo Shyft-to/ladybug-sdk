@@ -4,9 +4,6 @@ import {
 } from "@triton-one/yellowstone-grpc";
 import Client from "@triton-one/yellowstone-grpc";
 import { Parser } from "../Parsers/Parser";
-import { PublicKey } from "@solana/web3.js";
-import { Idl as CoralIdl } from "@coral-xyz/anchor";
-import { Idl as SerumIdl } from "@project-serum/anchor";
 
 export class AccountStreamer {
   private client: Client;
@@ -21,7 +18,7 @@ export class AccountStreamer {
   private onEndCallback?: () => void;
   private onCloseCallback?: () => void;
 
-  private parsers = new Parser();
+  private parser: Parser | undefined = undefined;
 
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
@@ -101,8 +98,8 @@ export class AccountStreamer {
     await this.pushUpdate();
   }
 
-  async addParser(programId: PublicKey, idl: CoralIdl | SerumIdl) {
-    this.parsers.addParser(programId, idl);
+  async addParser(parser: Parser) {
+    this.parser = parser;
   }
 
 
@@ -152,8 +149,12 @@ export class AccountStreamer {
       if (this.onDataCallback) {
         try {
           if (data.account) {
-            const formattedData = this.parsers.formatGeyserAccountData(data.account);
-            const parsedData = this.parsers.parseAccount(formattedData);
+            if(this.parser === undefined) {
+              this.onDataCallback(data);
+              return;
+            }
+            const formattedData = this.parser.formatGeyserAccountData(data.account);
+            const parsedData = this.parser.parseAccount(formattedData);
             this.onDataCallback(parsedData);
           } else {
             this.onDataCallback(data);
