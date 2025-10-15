@@ -171,7 +171,7 @@ export class Parser {
             const coder = this.solanaDataParsers.get(programId)!.coder;
             let decodedInstruction;
             try {
-                decodedInstruction = coder.instruction.decode(Buffer.from(ix.data));
+                decodedInstruction = plaintextFormatter(coder.instruction.decode(Buffer.from(ix.data)));
             } catch (error) {
                 console.log(`Error decoding instruction by idl: ${ix.data} for program ${programId}`);
                 decodedInstruction = ix.data;
@@ -237,7 +237,7 @@ export class Parser {
                     outerIndex,
                     programId,
                     accounts,
-                    data: coder.instruction.decode(ix.data),
+                    data: plaintextFormatter(coder.instruction.decode(ix.data)),
                     stackHeight: ix.stackHeight,
                 });
             }
