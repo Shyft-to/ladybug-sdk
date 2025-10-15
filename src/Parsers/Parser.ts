@@ -285,16 +285,28 @@ export class Parser {
     }
 
     parseTransaction(tx: VersionedTransactionResponse) {
+        console.time("acc keys: ");
         const allKeys = this.getAccountKeys(tx.transaction.message, tx.meta);
+        console.timeEnd("acc keys: ");
+        console.log("Time ag account keys: ", Date.now());
+        console.time("comp inst: ");
         const parsedCompiledInstruction = this.getParsedCompiledInstruction(
             tx.transaction.message.compiledInstructions,
             allKeys
         );
+        console.timeEnd("comp inst: ");
+        console.log("Time ag comp inst: ", Date.now());
+        console.time("inner inst: ");
         const parsedInnerInstructions = this.parseInnerInstructions(
             tx.meta?.innerInstructions,
             allKeys
         );
+        console.timeEnd("inner inst: ");
+        console.log("Time ag inner inst: ", Date.now());
+        console.time("parsed events: ");
         const parsedEvents = this.parseEvents(tx, allKeys);
+        console.timeEnd("parsed events: ");
+        console.log("Time ag parsed events: ", Date.now());
         if(tx.version === "legacy") {
             const txWithParsed = {
                 ...tx,

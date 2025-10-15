@@ -137,16 +137,22 @@ export class TransactionStreamer {
       if (this.onDataCallback) {
         try {
           
-          if (data.transaction) {
+          if (data?.transaction) {
+            console.log("Transaction Received at: ", Date.now());
             if(this.parser === undefined) {
               this.onDataCallback(data);
               return;
             }
+            console.time("Transaction Formatting time: ");
             const formatted = this.parser.formatGrpcTransactionData(
               data.transaction,
               Date.now()
             );
+            console.timeEnd("Transaction Formatting time: ");
+            console.log("Formatting complete at: ", Date.now());
+            
             const parsed = this.parser.parseTransaction(formatted);
+            console.log("Parsing complete at: ", Date.now());
             this.onDataCallback(parsed);
           } else {
             this.onDataCallback(data);
