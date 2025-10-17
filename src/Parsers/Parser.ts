@@ -221,7 +221,7 @@ export class Parser {
                 const accounts = ix.accounts.map((i) => allKeys[i]);
 
                 if (!programId || !this.solanaDataParsers.has(programId)) {
-                    console.log(`Parser not available for programId ${programId}`);
+                    // console.log(`Parser not available for programId ${programId}`);
                     decoded.push({
                         outerIndex,
                         programId,
@@ -265,13 +265,13 @@ export class Parser {
             for(const programId of commonProgramIds) {
                 const parser = this.solanaDataParsers.get(programId);
                 if(!parser) {
-                    console.log("Parser not available for programId: ", programId);
+                    // console.log("Parser not available for programId: ", programId);
                     continue;
                 }
 
                 const eventParser = parser.eventParser;
                 if(!eventParser) {
-                    console.log("Event Parser not available for programId: ", programId);
+                    // console.log("Event Parser not available for programId: ", programId);
                     continue;
                 }
 

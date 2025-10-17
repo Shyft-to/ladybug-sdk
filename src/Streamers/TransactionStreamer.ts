@@ -113,7 +113,7 @@ export class TransactionStreamer {
   }
 
   private async handleStream() {
-    //console.log("Subscribing and starting stream...");
+    console.log("Subscribing and starting stream...");
     //check if addresses not empty?
     this.stream = await this.client.subscribe();
 
