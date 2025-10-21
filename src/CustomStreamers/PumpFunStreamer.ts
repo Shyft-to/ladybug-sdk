@@ -21,6 +21,7 @@ export class PumpFunStreamer {
   private onEndCallback?: () => void;
   private onCloseCallback?: () => void;
   private onMigrateCallback?: (tx: any) => void;
+  private onNewTokenMintCallback?: (mintAddress: string, tx: any) => void;
 
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
@@ -71,6 +72,10 @@ export class PumpFunStreamer {
 
   onMigrate(callback: (tx: any) => void) {
     this.onMigrateCallback = callback;
+  }
+
+  onNewTokenMint(callback: (mintAddress: string, tx: any) => void) {
+    this.onNewTokenMintCallback = callback;
   }
 
 
@@ -158,16 +163,24 @@ export class PumpFunStreamer {
           );
           const parsed = this.parser.parseTransaction(formatted);
 
-          if (this.onDataCallback) this.onDataCallback(parsed);
+          if (this.onDataCallback) 
+            this.onDataCallback(parsed);
 
           if (this.onMigrateCallback && this.isPumpFunMigrationTransaction(parsed)) {
             this.onMigrateCallback(parsed);
           }
+
+          const mint = this.getNewTokenMint(parsed);
+          if (mint && this.onNewTokenMintCallback) {
+            this.onNewTokenMintCallback(mint, parsed);
+          }
         } else {
-          if (this.onDataCallback) this.onDataCallback(data);
+          if (this.onDataCallback) 
+            this.onDataCallback(data);
         }
       } catch (err) {
-        if (this.onErrorCallback) this.onErrorCallback(err);
+        if (this.onErrorCallback) 
+          this.onErrorCallback(err);
       }
     });
 
@@ -179,18 +192,40 @@ export class PumpFunStreamer {
   }
 
   private isPumpFunMigrationTransaction(parsedTxn: any): boolean {
-    if (!parsedTxn?.transaction?.message) return false;
+    if (!parsedTxn?.transaction?.message) 
+      return false;
 
     const message = parsedTxn.transaction.message;
 
     const instructions = message.instructions || message.compiledInstructions;
 
-    if (!Array.isArray(instructions)) return false;
+    if (!Array.isArray(instructions)) 
+      return false;
 
     const migrateFound = instructions.some(
       (ix: any) => ix?.name?.toLowerCase?.() === "migrate"
     );
 
     return migrateFound;
+  }
+
+  private getNewTokenMint(tx: any): string | null {
+    try {
+      const postBalances = tx?.meta?.postTokenBalances;
+
+      if (!Array.isArray(postBalances) || postBalances.length === 0) {
+        return null;
+      }
+
+      const mintAddress = postBalances[0]?.mint;
+      if (mintAddress && typeof mintAddress === "string") {
+        return mintAddress;
+      }
+
+      return null;
+    } catch (err) {
+      console.error("Error detecting new token mint:", err);
+      return null;
+    }
   }
 }
