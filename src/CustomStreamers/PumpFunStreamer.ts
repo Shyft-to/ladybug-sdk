@@ -14,18 +14,21 @@ export class PumpFunStreamer {
   private addresses: [string] = ["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"];
   private running: boolean = false;
   private stream?: any;
-  private parser: Parser | undefined = undefined;
-  
+  private parser: Parser;
+
   private onDataCallback?: (data: any) => void;
   private onErrorCallback?: (err: any) => void;
   private onEndCallback?: () => void;
   private onCloseCallback?: () => void;
+  private onMigrateCallback?: (tx: any) => void;
 
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
+
     const parser = new Parser();
     parser.addIDL(new PublicKey(this.addresses[0]), pumpIdl as Idl);
     this.parser = parser;
+
     this.request = {
       accounts: {},
       slots: {},
@@ -49,7 +52,7 @@ export class PumpFunStreamer {
     };
   }
 
- 
+
   onData(callback: (data: any) => void) {
     this.onDataCallback = callback;
   }
@@ -65,6 +68,11 @@ export class PumpFunStreamer {
   onClose(callback: () => void) {
     this.onCloseCallback = callback;
   }
+
+  onMigrate(callback: (tx: any) => void) {
+    this.onMigrateCallback = callback;
+  }
+
 
   private updateRequest() {
     this.request = {
@@ -93,15 +101,11 @@ export class PumpFunStreamer {
     });
   }
 
-//   async addAddresses(newAddresses: string[]) {
-//     newAddresses.forEach((addr) => this.addresses.add(addr));
-//     await this.pushUpdate();
-//   }
+  //   async addAddresses(newAddresses: string[]) {
+  //     newAddresses.forEach((addr) => this.addresses.add(addr));
+  //     await this.pushUpdate();
+  //   }
 
-
-  async addParser(parser: Parser) {
-    this.parser = parser;
-  }
 
   async start() {
     this.running = true;
@@ -143,33 +147,50 @@ export class PumpFunStreamer {
       });
     });
 
-     this.stream.on("data", (data: any) => {
-      if (this.onDataCallback) {
-        try {
-          
-          if (data.transaction) {
-            if(this.parser === undefined) {
-              this.onDataCallback(data);
-              return;
-            }
-            const formatted = this.parser.formatGrpcTransactionData(
-              data.transaction,
-              Date.now()
-            );
-            const parsed = this.parser.parseTransaction(formatted);
-            this.onDataCallback(parsed);
-          } else {
-            this.onDataCallback(data);
+    this.stream.on("data", (data: any) => {
+
+      if (!this.onDataCallback && !this.onMigrateCallback) return;
+      try {
+        if (data.transaction) {
+          const formatted = this.parser.formatGrpcTransactionData(
+            data.transaction,
+            Date.now()
+          );
+          const parsed = this.parser.parseTransaction(formatted);
+
+          if (this.onDataCallback) this.onDataCallback(parsed);
+
+          if (this.onMigrateCallback && this.isPumpFunMigrationTransaction(parsed)) {
+            this.onMigrateCallback(parsed);
           }
-        } catch (err) {
-          if (this.onErrorCallback) this.onErrorCallback(err);
+        } else {
+          if (this.onDataCallback) this.onDataCallback(data);
         }
+      } catch (err) {
+        if (this.onErrorCallback) this.onErrorCallback(err);
       }
     });
+
 
     await this.pushUpdate();
     await streamClosed;
 
     this.stream = undefined;
+  }
+
+  private isPumpFunMigrationTransaction(parsedTxn: any): boolean {
+    if (!parsedTxn?.transaction?.message) return false;
+
+    const message = parsedTxn.transaction.message;
+
+    const instructions = message.instructions || message.compiledInstructions;
+
+    if (!Array.isArray(instructions)) return false;
+
+    const migrateFound = instructions.some(
+      (ix: any) => ix?.name?.toLowerCase?.() === "migrate"
+    );
+
+    return migrateFound;
   }
 }
