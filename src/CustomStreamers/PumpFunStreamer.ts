@@ -22,6 +22,7 @@ export class PumpFunStreamer {
   private onCloseCallback?: () => void;
   private onMigrateCallback?: (tx: any) => void;
   private onNewTokenMintCallback?: (mintAddress: string, tx: any) => void;
+  private onBuySellCallback?: (tx: any) => void;
 
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
@@ -76,6 +77,10 @@ export class PumpFunStreamer {
 
   onNewTokenMint(callback: (mintAddress: string, tx: any) => void) {
     this.onNewTokenMintCallback = callback;
+  }
+
+  onBuySell(callback: (tx: any) => void) {
+    this.onBuySellCallback = callback;
   }
 
 
@@ -174,6 +179,10 @@ export class PumpFunStreamer {
           if (mint && this.onNewTokenMintCallback) {
             this.onNewTokenMintCallback(mint, parsed);
           }
+
+          if (this.onBuySellCallback && this.parseSwapTransactionOutput(parsed)) {
+            this.onBuySellCallback(parsed);
+          }
         } else {
           if (this.onDataCallback) 
             this.onDataCallback(data);
@@ -228,4 +237,68 @@ export class PumpFunStreamer {
       return null;
     }
   }
+
+  private parseSwapTransactionOutput(tx: any) {
+    if (!tx?.transaction?.message?.compiledInstructions && !tx?.transaction?.message?.instructions) {
+      return;
+    }
+
+    const parsedInstruction =
+      tx.transaction.message.compiledInstructions ??
+      tx.transaction.message.instructions;
+
+    const innerInstructions = tx.meta?.innerInstructions ?? [];
+
+    const swapInstruction =
+      parsedInstruction?.pumpAmmIxs?.find(
+        (ix: any) => ix.name === "buy" || ix.name === "sell"
+      ) ||
+      parsedInstruction?.find(
+        (ix: any) => ix.name === "buy" || ix.name === "sell"
+      ) ||
+      innerInstructions
+        ?.flatMap((ixGroup: any) => ixGroup.instructions ?? [])
+        ?.find((ix: any) => ix.name === "buy" || ix.name === "sell");
+
+    if (!swapInstruction) return;
+
+    const { name: type, accounts = [], args = {} } = swapInstruction;
+    const baseAmountIn = args?.amount;
+
+    const bondingCurve = accounts.find((a: any) => a.name === "bondingCurve")?.pubkey;
+    const userPubkey = accounts.find((a: any) => a.name === "user")?.pubkey;
+    const mint = accounts.find((a: any) => a.name === "mint")?.pubkey;
+
+    const alternativeAmountOut = innerInstructions
+      ?.flatMap((ixGroup: any) => ixGroup.instructions ?? [])
+      ?.find(
+        (ix: any) =>
+          ix.name === "transfer" &&
+          ix.args?.amount !== baseAmountIn &&
+          ix.accounts?.some((acct: any) => acct.pubkey === bondingCurve)
+      )?.args?.lamports;
+
+    const tradeEvent = tx.transaction.message?.events?.find(
+      (e: any) => e.name === "TradeEvent"
+    );
+    const solEventAmount = tradeEvent?.data?.sol_amount;
+    const tokenEventAmount = tradeEvent?.data?.token_amount;
+
+    const isBuy = type === "buy";
+    const inAmount = isBuy ? solEventAmount : tokenEventAmount;
+    const outAmount = isBuy
+      ? tokenEventAmount
+      : solEventAmount ?? alternativeAmountOut;
+
+    return {
+      type,
+      user: userPubkey,
+      mint,
+      bonding_curve: bondingCurve,
+      in_amount: inAmount,
+      out_amount: outAmount,
+    };
+  }
+
+
 }
