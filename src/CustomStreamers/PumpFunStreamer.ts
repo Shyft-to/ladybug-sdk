@@ -158,8 +158,8 @@ export class PumpFunStreamer {
     });
 
     this.stream.on("data", (data: any) => {
-
-      if (!this.onDataCallback && !this.onMigrateCallback) return;
+      console.log("Received data.....");
+      // if (!this.onDataCallback && !this.onMigrateCallback) return;
       try {
         if (data.transaction) {
           const formatted = this.parser.formatGrpcTransactionData(
@@ -174,9 +174,10 @@ export class PumpFunStreamer {
           if (this.onMigrateCallback && this.isPumpFunMigrationTransaction(parsed)) {
             this.onMigrateCallback(parsed);
           }
-
+          console.log("Checking token stream.....");
           const mint = this.getNewTokenMint(parsed);
           if (mint && this.onNewTokenMintCallback) {
+            console.log("pushing data to callback.....");
             this.onNewTokenMintCallback(mint, parsed);
           }
 
