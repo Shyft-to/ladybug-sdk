@@ -6,23 +6,40 @@ import Client from "@triton-one/yellowstone-grpc";
 import { Parser } from "../Parsers/Parser";
 import pumpIdl from "../IdlFiles/pump_0.1.0.json";
 import { PublicKey } from "@solana/web3.js";
-import { Idl } from "@coral-xyz/anchor"
+import { Idl } from "@coral-xyz/anchor";
+
+type instructionType = "buy" | "sell" | "tokenLaunch" | "tokenMigration";
+
+type TransactionTypeCallbacks = {
+  buy: (tx: any) => void;
+  sell: (tx: any) => void;
+  tokenLaunch: (mint: string, tx: any) => void;
+  tokenMigration: (tx: any) => void;
+};
 
 export class PumpFunStreamer {
   private client: Client;
   private request: SubscribeRequest;
-  private addresses: [string] = ["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"];
+  private pumpFunAddress: string =
+    "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+  private addresses: [string] = [this.pumpFunAddress];
   private running: boolean = false;
   private stream?: any;
   private parser: Parser;
+  private transactionTypesToWatch: instructionType[] = [];
+  private transactionRunning = false;
+  private accountRunning = false;
+
+  private transactionStream?: any;
+  private accountStream?: any;
 
   private onDataCallback?: (data: any) => void;
   private onErrorCallback?: (err: any) => void;
   private onEndCallback?: () => void;
   private onCloseCallback?: () => void;
-  private onMigrateCallback?: (tx: any) => void;
-  private onNewTokenMintCallback?: (mintAddress: string, tx: any) => void;
-  private onBuySellCallback?: (tx: any) => void;
+  private onTransactionCallback?: (tx: any) => void;
+  private onAccountCallback?: (acc: any) => void;
+  private onDetectedTypeCallbacks: Partial<TransactionTypeCallbacks> = {};
 
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
@@ -54,10 +71,9 @@ export class PumpFunStreamer {
     };
   }
 
-
-  onData(callback: (data: any) => void) {
-    this.onDataCallback = callback;
-  }
+  // onData(callback: (data: any) => void) {
+  //   this.onDataCallback = callback;
+  // }
 
   onError(callback: (error: any) => void) {
     this.onErrorCallback = callback;
@@ -71,38 +87,24 @@ export class PumpFunStreamer {
     this.onCloseCallback = callback;
   }
 
-  onMigrate(callback: (tx: any) => void) {
-    this.onMigrateCallback = callback;
+  onTransaction(callback: (tx: any) => void) {
+    this.onTransactionCallback = callback;
   }
 
-  onNewTokenMint(callback: (mintAddress: string, tx: any) => void) {
-    this.onNewTokenMintCallback = callback;
+  onAccount(callback: (acc: any) => void) {
+    this.onAccountCallback = callback;
   }
 
-  onBuySell(callback: (tx: any) => void) {
-    this.onBuySellCallback = callback;
-  }
-
-
-  private updateRequest() {
-    this.request = {
-      ...this.request,
-      transactions: {
-        tracked: {
-          vote: false,
-          failed: false,
-          signature: undefined,
-          accountInclude: Array.from(this.addresses),
-          accountExclude: [],
-          accountRequired: [],
-        },
-      },
-    };
+  onDetectedTransactionType<T extends keyof TransactionTypeCallbacks>(
+    type: T,
+    callback: TransactionTypeCallbacks[T]
+  ) {
+    this.onDetectedTypeCallbacks[type] = callback;
   }
 
   private async pushUpdate() {
     if (!this.stream) return;
-    this.updateRequest();
+
     await new Promise<void>((resolve, reject) => {
       this.stream!.write(this.request, (err: any) => {
         if (err) reject(err);
@@ -110,12 +112,6 @@ export class PumpFunStreamer {
       });
     });
   }
-
-  //   async addAddresses(newAddresses: string[]) {
-  //     newAddresses.forEach((addr) => this.addresses.add(addr));
-  //     await this.pushUpdate();
-  //   }
-
 
   async start() {
     this.running = true;
@@ -130,10 +126,138 @@ export class PumpFunStreamer {
     }
   }
 
+  async startStreamingTransactions() {
+    this.transactionRunning = true;
+    let retryDelay = 1000;
+
+    while (this.transactionRunning) {
+      try {
+        console.log("Starting transaction stream...");
+        await this.handleTransactionStream();
+
+        // reset retry delay on successful run
+        retryDelay = 1000;
+        console.log("Transaction stream ended, reconnecting cleanly...");
+      } catch (error) {
+        console.error("Transaction stream error:", error);
+
+        if (!this.transactionRunning) break;
+
+        console.log(
+          `⏳ Retrying transaction stream in ${retryDelay / 1000}s...`
+        );
+        await new Promise((res) => setTimeout(res, retryDelay));
+        retryDelay = Math.min(retryDelay * 2, 30000);
+      }
+    }
+  }
+
+  stopStreamingTransactions() {
+    console.log("Stopping transaction stream...");
+    this.transactionRunning = false;
+    this.transactionStream?.cancel();
+    this.transactionStream = undefined;
+  }
+
+  async startStreamingAccounts() {
+    this.accountRunning = true;
+    let retryDelay = 1000;
+
+    while (this.accountRunning) {
+      try {
+        console.log("Starting account stream...");
+        await this.handleAccountStream();
+
+        retryDelay = 1000;
+        console.log("Account stream ended, reconnecting cleanly...");
+      } catch (error) {
+        console.error("Account stream error:", error);
+
+        if (!this.accountRunning) break;
+
+        console.log(`⏳ Retrying account stream in ${retryDelay / 1000}s...`);
+        await new Promise((res) => setTimeout(res, retryDelay));
+        retryDelay = Math.min(retryDelay * 2, 30000);
+      }
+    }
+  }
+
+  stopStreamingAccounts() {
+    console.log("Stopping account stream...");
+    this.accountRunning = false;
+    this.accountStream?.cancel();
+    this.accountStream = undefined;
+  }
+
   stop() {
     this.running = false;
     this.stream?.cancel();
     this.stream = undefined;
+  }
+
+  private async handleTransactionStream() {
+    this.transactionStream = await this.client.subscribe();
+
+    const streamClosed = new Promise<void>((resolve, reject) => {
+      this.transactionStream.on("error", (err: any) => reject(err));
+      this.transactionStream.on("end", resolve);
+      this.transactionStream.on("close", resolve);
+    });
+
+    // set request for transactions
+    this.request = {
+      ...this.request,
+      accounts: {},
+      transactions: {
+        tracked: {
+          vote: false,
+          failed: false,
+          signature: undefined,
+          accountInclude: Array.from(this.addresses),
+          accountExclude: [],
+          accountRequired: [],
+        },
+      },
+    };
+
+    await this.pushUpdateTo(this.transactionStream);
+    await streamClosed;
+  }
+
+  private async handleAccountStream() {
+    this.accountStream = await this.client.subscribe();
+
+    const streamClosed = new Promise<void>((resolve, reject) => {
+      this.accountStream.on("error", (err: any) => reject(err));
+      this.accountStream.on("end", resolve);
+      this.accountStream.on("close", resolve);
+    });
+
+    // request setup for account streaming
+    this.request = {
+      ...this.request,
+      transactions: {},
+      accounts: {
+        program_name: {
+          account: [],
+          filters: [],
+          owner: Array.from(this.addresses),
+        },
+      },
+    };
+
+    await this.pushUpdateTo(this.accountStream);
+    await streamClosed;
+  }
+
+  private async pushUpdateTo(stream: any) {
+    if (!stream) return;
+    await new Promise<void>((resolve, reject) => {
+      stream.write(this.request, (err: any) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
   }
 
   private async handleStream() {
@@ -158,9 +282,8 @@ export class PumpFunStreamer {
     });
 
     this.stream.on("data", (data: any) => {
-      console.log("Received data.....");
-      // if (!this.onDataCallback && !this.onMigrateCallback) return;
       try {
+        // if (!data.transaction) return;
         if (data.transaction) {
           const formatted = this.parser.formatGrpcTransactionData(
             data.transaction,
@@ -168,32 +291,17 @@ export class PumpFunStreamer {
           );
           const parsed = this.parser.parseTransaction(formatted);
 
-          if (this.onDataCallback) 
-            this.onDataCallback(parsed);
+          if (this.onTransactionCallback) this.onTransactionCallback(parsed);
 
-          if (this.onMigrateCallback && this.isPumpFunMigrationTransaction(parsed)) {
-            this.onMigrateCallback(parsed);
-          }
-          console.log("Checking token stream.....");
-          const mint = this.getNewTokenMint(parsed);
-          if (mint && this.onNewTokenMintCallback) {
-            console.log("pushing data to callback.....");
-            this.onNewTokenMintCallback(mint, parsed);
-          }
-
-          if (this.onBuySellCallback && this.parseSwapTransactionOutput(parsed)) {
-            this.onBuySellCallback(parsed);
-          }
-        } else {
-          if (this.onDataCallback) 
-            this.onDataCallback(data);
+          this.detectAndTriggerTransactionType(parsed);
+        } else if (data.account) {
+          const parsed = this.parser.parseAccount(data.account);
+          if (this.onAccountCallback) this.onAccountCallback(parsed);
         }
-      } catch (err) {
-        if (this.onErrorCallback) 
-          this.onErrorCallback(err);
+      } catch (error) {
+        if (this.onErrorCallback) this.onErrorCallback(error);
       }
     });
-
 
     await this.pushUpdate();
     await streamClosed;
@@ -201,16 +309,46 @@ export class PumpFunStreamer {
     this.stream = undefined;
   }
 
+  private detectAndTriggerTransactionType(tx: any) {
+    try {
+      if (
+        this.onDetectedTypeCallbacks.tokenMigration &&
+        this.isPumpFunMigrationTransaction(tx)
+      ) {
+        this.onDetectedTypeCallbacks.tokenMigration(tx);
+        return;
+      }
+
+      const mint = this.getNewTokenMint(tx);
+      if (this.onDetectedTypeCallbacks.tokenLaunch && mint) {
+        this.onDetectedTypeCallbacks.tokenLaunch(mint, tx);
+        return;
+      }
+
+      const swap = this.parseSwapTransactionOutput(tx);
+      if (swap) {
+        if (swap.type === "buy" && this.onDetectedTypeCallbacks.buy) {
+          this.onDetectedTypeCallbacks.buy(tx);
+          return;
+        }
+        if (swap.type === "sell" && this.onDetectedTypeCallbacks.sell) {
+          this.onDetectedTypeCallbacks.sell(tx);
+          return;
+        }
+      }
+    } catch (err) {
+      if (this.onErrorCallback) this.onErrorCallback(err);
+    }
+  }
+
   private isPumpFunMigrationTransaction(parsedTxn: any): boolean {
-    if (!parsedTxn?.transaction?.message) 
-      return false;
+    if (!parsedTxn?.transaction?.message) return false;
 
     const message = parsedTxn.transaction.message;
 
     const instructions = message.instructions || message.compiledInstructions;
 
-    if (!Array.isArray(instructions)) 
-      return false;
+    if (!Array.isArray(instructions)) return false;
 
     const migrateFound = instructions.some(
       (ix: any) => ix?.name?.toLowerCase?.() === "migrate"
@@ -240,7 +378,10 @@ export class PumpFunStreamer {
   }
 
   private parseSwapTransactionOutput(tx: any) {
-    if (!tx?.transaction?.message?.compiledInstructions && !tx?.transaction?.message?.instructions) {
+    if (
+      !tx?.transaction?.message?.compiledInstructions &&
+      !tx?.transaction?.message?.instructions
+    ) {
       return;
     }
 
@@ -266,7 +407,9 @@ export class PumpFunStreamer {
     const { name: type, accounts = [], args = {} } = swapInstruction;
     const baseAmountIn = args?.amount;
 
-    const bondingCurve = accounts.find((a: any) => a.name === "bondingCurve")?.pubkey;
+    const bondingCurve = accounts.find(
+      (a: any) => a.name === "bondingCurve"
+    )?.pubkey;
     const userPubkey = accounts.find((a: any) => a.name === "user")?.pubkey;
     const mint = accounts.find((a: any) => a.name === "mint")?.pubkey;
 
@@ -300,6 +443,4 @@ export class PumpFunStreamer {
       out_amount: outAmount,
     };
   }
-
-
 }
