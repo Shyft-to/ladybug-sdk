@@ -204,6 +204,24 @@ export class PumpFunStreamer {
       this.transactionStream.on("close", resolve);
     });
 
+    this.transactionStream.on("data", (data: any) => {
+      try {
+        if (data.transaction) {
+          const formatted = this.parser.formatGrpcTransactionData(
+            data.transaction,
+            Date.now()
+          );
+          const parsed = this.parser.parseTransaction(formatted);
+
+          if (this.onTransactionCallback) this.onTransactionCallback(parsed);
+
+          this.detectAndTriggerTransactionType(parsed);
+        }
+      } catch (error) {
+        if (this.onErrorCallback) this.onErrorCallback(error);
+      }
+    });
+
     // set request for transactions
     this.request = {
       ...this.request,
@@ -225,30 +243,60 @@ export class PumpFunStreamer {
   }
 
   private async handleAccountStream() {
+    // open a new subscription
     this.accountStream = await this.client.subscribe();
 
+    // handle stream lifecycle (close/error/end)
     const streamClosed = new Promise<void>((resolve, reject) => {
-      this.accountStream.on("error", (err: any) => reject(err));
-      this.accountStream.on("end", resolve);
-      this.accountStream.on("close", resolve);
+      this.accountStream.on("error", (err: any) => {
+        if (this.onErrorCallback) this.onErrorCallback(err);
+        reject(err);
+      });
+      this.accountStream.on("end", () => {
+        if (this.onEndCallback) this.onEndCallback();
+        resolve();
+      });
+      this.accountStream.on("close", () => {
+        if (this.onCloseCallback) this.onCloseCallback();
+        resolve();
+      });
     });
 
-    // request setup for account streaming
+    // ✅ Handle incoming account data
+    this.accountStream.on("data", (data: any) => {
+      try {
+        if (data.account) {
+          const parsed = this.parser.parseAccount(data.account);
+
+          if (this.onAccountCallback) {
+            this.onAccountCallback(parsed);
+          }
+        }
+      } catch (error) {
+        if (this.onErrorCallback) this.onErrorCallback(error);
+      }
+    });
+
+    // ✅ Update the request for account streaming
     this.request = {
       ...this.request,
-      transactions: {},
+      transactions: {}, // clear transaction streaming
       accounts: {
         program_name: {
-          account: [],
-          filters: [],
-          owner: Array.from(this.addresses),
+          account: Array.from(this.addresses), // which accounts to track
+          filters: [], // optional Solana account filters
+          owner: Array.from(this.addresses), // accounts owned by these pubkeys
         },
       },
     };
 
+    // ✅ Send the request update to the stream
     await this.pushUpdateTo(this.accountStream);
+
+    // Wait for stream end/error before returning
     await streamClosed;
   }
+
 
   private async pushUpdateTo(stream: any) {
     if (!stream) return;
