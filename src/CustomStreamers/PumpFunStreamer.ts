@@ -113,7 +113,7 @@ export class PumpFunStreamer {
     });
   }
 
-  async start() {
+  private async start() {
     this.running = true;
     while (this.running) {
       try {
@@ -189,7 +189,7 @@ export class PumpFunStreamer {
     this.accountStream = undefined;
   }
 
-  stop() {
+  private stop() {
     this.running = false;
     this.stream?.cancel();
     this.stream = undefined;
@@ -243,10 +243,8 @@ export class PumpFunStreamer {
   }
 
   private async handleAccountStream() {
-    // open a new subscription
     this.accountStream = await this.client.subscribe();
 
-    // handle stream lifecycle (close/error/end)
     const streamClosed = new Promise<void>((resolve, reject) => {
       this.accountStream.on("error", (err: any) => {
         if (this.onErrorCallback) this.onErrorCallback(err);
@@ -262,11 +260,11 @@ export class PumpFunStreamer {
       });
     });
 
-    // ✅ Handle incoming account data
     this.accountStream.on("data", (data: any) => {
       try {
         if (data.account) {
-          const parsed = this.parser.parseAccount(data.account);
+          const decoded = this.parser.formatGeyserAccountData(data.account);
+          const parsed = this.parser.parseAccount(decoded);
 
           if (this.onAccountCallback) {
             this.onAccountCallback(parsed);
@@ -277,23 +275,20 @@ export class PumpFunStreamer {
       }
     });
 
-    // ✅ Update the request for account streaming
     this.request = {
       ...this.request,
-      transactions: {}, // clear transaction streaming
+      transactions: {},
       accounts: {
         program_name: {
-          account: Array.from(this.addresses), // which accounts to track
-          filters: [], // optional Solana account filters
-          owner: Array.from(this.addresses), // accounts owned by these pubkeys
+          account: [],
+          filters: [], 
+          owner: Array.from(this.addresses),
         },
       },
     };
 
-    // ✅ Send the request update to the stream
     await this.pushUpdateTo(this.accountStream);
 
-    // Wait for stream end/error before returning
     await streamClosed;
   }
 
