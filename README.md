@@ -1,7 +1,41 @@
-# ladybug-sdk
+# 🐞 ladybug-sdk: Real-Time Solana Data Streamer
 A TypeScript SDK for streaming and parsing real-time Solana blockchain data using the Yellowstone gRPC service.
 
-## Examples
+## ✨ Features
+- **Real-Time Data:** Stream transactions and account updates directly from the Solana network.
+
+- **Event Detection:** Built-in logic to easily detect common DeFi events like Buys, Sells, and Token Launches.
+
+- **Custom Parsing:** IDL-based program instruction parsing via the internal Parser class.
+
+- **TypeScript Native:** Written in TypeScript for better developer experience and type safety.
+
+## Parsers
+
+The parser accepts two types of IDL, the IDL which are compatible with `@coral-xyz/anchor` and `@project-serum/anchor`.
+
+### Initialization
+```javascript
+import { Parser } from "ladybug-sdk";
+import { Idl as coralXyzIdl } from "@coral-xyz/anchor";
+import { Idl as projectSerumIdl } from "@project-serum/anchor";
+
+const parser = new Parser();
+parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
+
+```
+
+Once this is initialized, we can decode both transactions and accounts using this parser.
+
+```javascript
+parser.parseTransaction(tx); //parsing transactions
+parser.parseAccount(rawAccount); //parsing account
+```
+
+## Transaction Streamers
+We can stream parsed transactions using the `TransactionStreamer` class. 
+
+## Examples: Custom Parsers
 
 ### Initialization
 ```javascript
@@ -13,9 +47,9 @@ const streamer = new PumpFunStreamer(process.env.ENDPOINT!, process.env.X_TOKEN)
 ### Getting all transactions
 
 ```javascript
-streamer.startStreamingTransactions();
-
 streamer.onTransaction(processData);
+
+streamer.startStreamingTransactions();
 
 setTimeout(() => {
     console.log("\n\n\n\nStopping...\n\n\n\n");
