@@ -4,7 +4,7 @@ import {
 } from "@triton-one/yellowstone-grpc";
 import Client from "@triton-one/yellowstone-grpc";
 import { Parser } from "../Parsers/Parser";
-import pumpIdl from "../IdlFiles/pump_0.1.0.json";
+import pumpIdl from "../IdlFiles/pump_amm_0.1.0.json";
 import { PublicKey } from "@solana/web3.js";
 import { Idl } from "@coral-xyz/anchor";
 
@@ -20,13 +20,12 @@ type TransactionTypeCallbacks = {
 export class PumpAmmStreamer {
   private client: Client;
   private request: SubscribeRequest;
-  private pumpFunAddress: string =
+  private pumpAmmAddress: string =
     "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA";
-  private addresses: [string] = [this.pumpFunAddress];
+  private addresses: [string] = [this.pumpAmmAddress];
   private running: boolean = false;
   private stream?: any;
   private parser: Parser;
-  private transactionTypesToWatch: instructionType[] = [];
   private transactionRunning = false;
   private accountRunning = false;
 
@@ -356,7 +355,7 @@ export class PumpAmmStreamer {
     try {
       if (
         this.onDetectedTypeCallbacks.tokenMigration &&
-        this.isPumpFunMigrationTransaction(tx)
+        this.isPumpAmmMigrationTransaction(tx)
       ) {
         this.onDetectedTypeCallbacks.tokenMigration(tx);
         return;
@@ -384,7 +383,7 @@ export class PumpAmmStreamer {
     }
   }
 
-  private isPumpFunMigrationTransaction(parsedTxn: any): boolean {
+  private isPumpAmmMigrationTransaction(parsedTxn: any): boolean {
     if (!parsedTxn?.transaction?.message) return false;
 
     const message = parsedTxn.transaction.message;
@@ -458,14 +457,14 @@ export class PumpAmmStreamer {
     const completeInnerInstructions = tx.meta?.innerInstructions ?? [];
 
     const parsedInstruction: { programId: string, accounts: string[], data: any }[] = completeParsedInstruction.filter(
-      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpAmmAddress
     );
 
     const innerInstructions: { outerIndex: number, programId: string, accounts: string[], data: any }[] = completeInnerInstructions.filter(
-      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpAmmAddress
     );
 
-    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpFunAddress).find(
+    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpAmmAddress).find(
       (ix) => ix?.data?.name === "create"
     ) || innerInstructions?.find((ix) => ix?.data?.name === "create");
 
@@ -499,14 +498,14 @@ export class PumpAmmStreamer {
     const completeInnerInstructions = tx.meta?.innerInstructions ?? [];
 
     const parsedInstruction: { programId: string, accounts: string[], data: any }[] = completeParsedInstruction.filter(
-      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpAmmAddress
     );
 
     const innerInstructions: { outerIndex: number, programId: string, accounts: string[], data: any }[] = completeInnerInstructions.filter(
-      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpAmmAddress
     );
 
-    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpFunAddress).find(
+    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpAmmAddress).find(
       (ix) => ix?.data?.name === "buy" || ix?.data?.name === "sell"
     ) || innerInstructions?.find((ix) => ix?.data?.name === "buy" || ix?.data?.name === "sell");
 
