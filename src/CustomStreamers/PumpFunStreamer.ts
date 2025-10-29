@@ -428,62 +428,34 @@ export class PumpFunStreamer {
       return;
     }
 
-    const parsedInstruction =
+    const completeParsedInstruction =
       tx.transaction.message.compiledInstructions ??
       tx.transaction.message.instructions;
 
-    const innerInstructions = tx.meta?.innerInstructions ?? [];
+    const completeInnerInstructions = tx.meta?.innerInstructions ?? [];
 
-    const swapInstruction =
-      parsedInstruction?.pumpAmmIxs?.find(
-        (ix: any) => ix.name === "buy" || ix.name === "sell"
-      ) ||
-      parsedInstruction?.find(
-        (ix: any) => ix.name === "buy" || ix.name === "sell"
-      ) ||
-      innerInstructions
-        ?.flatMap((ixGroup: any) => ixGroup.instructions ?? [])
-        ?.find((ix: any) => ix.name === "buy" || ix.name === "sell");
+    const parsedInstruction: { programId: string, accounts: string[], data: any }[] = completeParsedInstruction.filter(
+      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+    );
+
+    const innerInstructions: { outerIndex: number, programId: string, accounts: string[], data: any }[] = completeInnerInstructions.filter(
+      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+    );
+
+    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpFunAddress).find(
+      (ix) => ix?.data?.name === "buy" || ix?.data?.name === "sell"
+    ) || innerInstructions?.find((ix) => ix?.data?.name === "buy" || ix?.data?.name === "sell");
 
     if (!swapInstruction) return;
 
-    const { name: type, accounts = [], args = {} } = swapInstruction;
-    const baseAmountIn = args?.amount;
-
-    const bondingCurve = accounts.find(
-      (a: any) => a.name === "bondingCurve"
-    )?.pubkey;
-    const userPubkey = accounts.find((a: any) => a.name === "user")?.pubkey;
-    const mint = accounts.find((a: any) => a.name === "mint")?.pubkey;
-
-    const alternativeAmountOut = innerInstructions
-      ?.flatMap((ixGroup: any) => ixGroup.instructions ?? [])
-      ?.find(
-        (ix: any) =>
-          ix.name === "transfer" &&
-          ix.args?.amount !== baseAmountIn &&
-          ix.accounts?.some((acct: any) => acct.pubkey === bondingCurve)
-      )?.args?.lamports;
-
-    const tradeEvent = tx.transaction.message?.events?.find(
-      (e: any) => e.name === "TradeEvent"
-    );
-    const solEventAmount = tradeEvent?.data?.sol_amount;
-    const tokenEventAmount = tradeEvent?.data?.token_amount;
-
-    const isBuy = type === "buy";
-    const inAmount = isBuy ? solEventAmount : tokenEventAmount;
-    const outAmount = isBuy
-      ? tokenEventAmount
-      : solEventAmount ?? alternativeAmountOut;
+    const name = swapInstruction?.data?.name;
+    const accounts = swapInstruction?.accounts;
+    const args = swapInstruction?.data?.data;
 
     return {
-      type,
-      user: userPubkey,
-      mint,
-      bonding_curve: bondingCurve,
-      in_amount: inAmount,
-      out_amount: outAmount,
-    };
+      type: name,
+      accounts,
+      args
+    }
   }
 }
