@@ -16,7 +16,7 @@ The parser accepts two types of IDL, the IDL which are compatible with `@coral-x
 
 ### Initialization
 ```javascript
-import { Parser } from "ladybug-sdk";
+import { Parser } from "ladybug";
 import { Idl as coralXyzIdl } from "@coral-xyz/anchor";
 import { Idl as projectSerumIdl } from "@project-serum/anchor";
 
@@ -29,11 +29,45 @@ Once this is initialized, we can decode both transactions and accounts using thi
 
 ```javascript
 parser.parseTransaction(tx); //parsing transactions
-parser.parseAccount(rawAccount); //parsing account
+parser.parseAccountData(rawAccount); //parsing account
 ```
 
 ## Transaction Streamers
-We can stream parsed transactions using the `TransactionStreamer` class. 
+We can stream parsed transactions using the `TransactionStreamer` class. It accepts your `gRPC url` and `x-token`, and a `parser` object to parse transactions.
+
+### Initialization
+```javascript
+const parser = new Parser();
+parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
+//initialzing parser, and adding IDL as show in previous step
+
+const streamer = new TransactionStreamer("Your-gRPC-endpoint","access-token"); 
+//initializing Streamer
+
+streamer.addParser(parser);
+//adding parser to the streamer
+```
+
+### Streaming Transactions
+Once initialized, we can add the address for which we want to stream transactions
+
+```javascript
+
+streamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
+//add address
+
+streamer.onData(callbackFn) //adds a callback function to handle incoming data
+
+streamer.start() //starts streaming transactions
+```
+
+We can stop streaming transactions in the following manner.
+```javascript
+streamer.stop() //stop streaming
+
+streamer.removeAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]) //accepts a list of address and removes it
+```
+
 
 ## Examples: Custom Parsers
 
