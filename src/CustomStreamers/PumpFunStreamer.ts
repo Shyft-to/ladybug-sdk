@@ -362,7 +362,7 @@ export class PumpFunStreamer {
         return;
       }
 
-      const mint = this.getNewTokenMint(tx);
+      const mint = this.getNewTokenCreate(tx);
       if (this.onDetectedTypeCallbacks.tokenLaunch && mint) {
         this.onDetectedTypeCallbacks.tokenLaunch(mint, tx);
         return;
@@ -416,6 +416,54 @@ export class PumpFunStreamer {
       return null;
     } catch (err) {
       console.error("Error detecting new token mint:", err);
+      return null;
+    }
+  }
+
+  private getNewTokenCreate(tx: any): string | null {
+    try {
+      if (
+      !tx?.transaction?.message?.compiledInstructions &&
+      !tx?.transaction?.message?.instructions
+    ) {
+      return null;
+    }
+
+    const postBalances = tx?.meta?.postTokenBalances;
+
+      if (!Array.isArray(postBalances) || postBalances.length === 0) {
+        return null;
+      }
+
+    const completeParsedInstruction =
+      tx.transaction.message.compiledInstructions ??
+      tx.transaction.message.instructions;
+
+    const completeInnerInstructions = tx.meta?.innerInstructions ?? [];
+
+    const parsedInstruction: { programId: string, accounts: string[], data: any }[] = completeParsedInstruction.filter(
+      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+    );
+
+    const innerInstructions: { outerIndex: number, programId: string, accounts: string[], data: any }[] = completeInnerInstructions.filter(
+      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+    );
+
+    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpFunAddress).find(
+      (ix) => ix?.data?.name === "create"
+    ) || innerInstructions?.find((ix) => ix?.data?.name === "create");
+
+    if (!swapInstruction) return null;  
+    
+
+      const mintAddress = postBalances[0]?.mint;
+      if (mintAddress && typeof mintAddress === "string") {
+        return mintAddress;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error detecting new token create:", error);
       return null;
     }
   }
