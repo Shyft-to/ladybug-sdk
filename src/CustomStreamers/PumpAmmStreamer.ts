@@ -361,8 +361,8 @@ export class PumpAmmStreamer {
         return;
       }
 
-      const mint = this.newPoolTxn(tx);
-      if (this.onDetectedTypeCallbacks.newPool) {
+      const createFound = this.newPoolTxn(tx);
+      if (createFound && this.onDetectedTypeCallbacks.newPool) {
         this.onDetectedTypeCallbacks.newPool(tx);
         return;
       }
@@ -408,11 +408,11 @@ export class PumpAmmStreamer {
 
     if (!Array.isArray(instructions)) return false;
 
-    const migrateFound = instructions.some(
+    const createFound = instructions.some(
       (ix: any) => ix?.name?.toLowerCase?.() === "create_pool"
     );
 
-    return migrateFound;
+    return createFound;
   }
 
   private getNewTokenMint(tx: any): string | null {
