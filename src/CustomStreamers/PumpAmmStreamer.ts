@@ -39,6 +39,8 @@ export class PumpAmmStreamer {
   private onTransactionCallback?: (tx: any) => void;
   private onAccountCallback?: (acc: any) => void;
   private onDetectedTypeCallbacks: Partial<TransactionTypeCallbacks> = {};
+  private instructionEnum: Record<string, string> = {};
+  private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
 
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
@@ -46,7 +48,8 @@ export class PumpAmmStreamer {
     const parser = new Parser();
     parser.addIDL(new PublicKey(this.addresses[0]), pumpIdl as Idl);
     this.parser = parser;
-
+    this.initializeInstructionEnum(pumpIdl);
+    
     this.request = {
       accounts: {},
       slots: {},
@@ -69,6 +72,13 @@ export class PumpAmmStreamer {
       commitment: CommitmentLevel.PROCESSED,
     };
   }
+
+  private initializeInstructionEnum(idl: any) {
+    this.instructionEnum = Object.fromEntries(
+      idl.instructions.map((ix: any) => [ix.name, ix.name])
+    );
+  }
+
 
   // onData(callback: (data: any) => void) {
   //   this.onDataCallback = callback;
@@ -99,6 +109,10 @@ export class PumpAmmStreamer {
     callback: TransactionTypeCallbacks[T]
   ) {
     this.onDetectedTypeCallbacks[type] = callback;
+  }
+
+  onInstruction(type: keyof typeof this.instructionEnum, callback: (tx: any) => void) {
+    this.onInstructionCallbacks[type] = callback;
   }
 
   private async pushUpdate() {
@@ -336,6 +350,7 @@ export class PumpAmmStreamer {
           if (this.onTransactionCallback) this.onTransactionCallback(parsed);
 
           this.detectAndTriggerTransactionType(parsed);
+          this.detectInstructionType(parsed);
         } else if (data.account) {
           const parsed = this.parser.parseAccount(data.account);
           if (this.onAccountCallback) this.onAccountCallback(parsed);
@@ -376,6 +391,23 @@ export class PumpAmmStreamer {
         if (swap.type === "sell" && this.onDetectedTypeCallbacks.sell) {
           this.onDetectedTypeCallbacks.sell(tx);
           return;
+        }
+      }
+    } catch (err) {
+      if (this.onErrorCallback) this.onErrorCallback(err);
+    }
+  }
+
+  private detectInstructionType(tx: any) {
+    try {
+      if (!tx?.instructions) return;
+
+      for (const ix of tx.instructions) {
+        const name = ix.name; // Parsed instruction name from your Parser
+
+        if (name && this.onInstructionCallbacks[name]) {
+          this.onInstructionCallbacks[name](tx);
+          break; // Trigger once per tx if you want
         }
       }
     } catch (err) {
