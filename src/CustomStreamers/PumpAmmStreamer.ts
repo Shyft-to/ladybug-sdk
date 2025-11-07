@@ -229,6 +229,7 @@ export class PumpAmmStreamer {
           if (this.onTransactionCallback) this.onTransactionCallback(parsed);
 
           this.detectAndTriggerTransactionType(parsed);
+          this.detectInstructionType(parsed);
         }
       } catch (error) {
         if (this.onErrorCallback) this.onErrorCallback(error);
@@ -350,7 +351,7 @@ export class PumpAmmStreamer {
           if (this.onTransactionCallback) this.onTransactionCallback(parsed);
 
           this.detectAndTriggerTransactionType(parsed);
-          this.detectInstructionType(parsed);
+          // this.detectInstructionType(parsed);
         } else if (data.account) {
           const parsed = this.parser.parseAccount(data.account);
           if (this.onAccountCallback) this.onAccountCallback(parsed);
@@ -400,10 +401,20 @@ export class PumpAmmStreamer {
 
   private detectInstructionType(tx: any) {
     try {
-      if (!tx?.instructions) return;
+      if (!tx?.transaction?.message) return false;
 
-      for (const ix of tx.instructions) {
-        const name = ix.name; // Parsed instruction name from your Parser
+      const message = tx.transaction.message;
+
+      let instructions = message.instructions || message.compiledInstructions;
+
+      if (!Array.isArray(instructions)) return false;
+
+      const innerInstructions = tx.meta?.innerInstructions ?? [];
+
+      instructions = {...instructions, ...innerInstructions};
+      
+      for (const ix of instructions) {
+        const name = ix?.data?.name;
 
         if (name && this.onInstructionCallbacks[name]) {
           this.onInstructionCallbacks[name](tx);
