@@ -40,6 +40,8 @@ export class PumpFunStreamer {
   private onTransactionCallback?: (tx: any) => void;
   private onAccountCallback?: (acc: any) => void;
   private onDetectedTypeCallbacks: Partial<TransactionTypeCallbacks> = {};
+  private instructionEnum: Record<string, string> = {};
+  private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
 
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
@@ -47,6 +49,7 @@ export class PumpFunStreamer {
     const parser = new Parser();
     parser.addIDL(new PublicKey(this.addresses[0]), pumpIdl as Idl);
     this.parser = parser;
+    this.initializeInstructionEnum(pumpIdl);
 
     this.request = {
       accounts: {},
@@ -69,6 +72,12 @@ export class PumpFunStreamer {
       ping: undefined,
       commitment: CommitmentLevel.PROCESSED,
     };
+  }
+
+  private initializeInstructionEnum(idl: any) {
+    this.instructionEnum = Object.fromEntries(
+      idl.instructions.map((ix: any) => [ix.name, ix.name])
+    );
   }
 
   // onData(callback: (data: any) => void) {
@@ -100,6 +109,10 @@ export class PumpFunStreamer {
     callback: TransactionTypeCallbacks[T]
   ) {
     this.onDetectedTypeCallbacks[type] = callback;
+  }
+
+  onInstruction(type: keyof typeof this.instructionEnum, callback: (tx: any) => void) {
+    this.onInstructionCallbacks[type] = callback;
   }
 
   private async pushUpdate() {
@@ -216,6 +229,7 @@ export class PumpFunStreamer {
           if (this.onTransactionCallback) this.onTransactionCallback(parsed);
 
           this.detectAndTriggerTransactionType(parsed);
+          this.detectInstructionType(parsed);
         }
       } catch (error) {
         if (this.onErrorCallback) this.onErrorCallback(error);
@@ -377,6 +391,33 @@ export class PumpFunStreamer {
         if (swap.type === "sell" && this.onDetectedTypeCallbacks.sell) {
           this.onDetectedTypeCallbacks.sell(tx);
           return;
+        }
+      }
+    } catch (err) {
+      if (this.onErrorCallback) this.onErrorCallback(err);
+    }
+  }
+
+  private detectInstructionType(tx: any) {
+    try {
+      if (!tx?.transaction?.message) return false;
+
+      const message = tx.transaction.message;
+
+      let instructions = message.instructions || message.compiledInstructions;
+
+      if (!Array.isArray(instructions)) return false;
+
+      const innerInstructions = tx.meta?.innerInstructions ?? [];
+
+      instructions = {...instructions, ...innerInstructions};
+      
+      for (const ix of instructions) {
+        const name = ix?.data?.name;
+
+        if (name && this.onInstructionCallbacks[name]) {
+          this.onInstructionCallbacks[name](tx);
+          break; // Trigger once per tx if you want
         }
       }
     } catch (err) {
