@@ -404,20 +404,27 @@ export class PumpFunStreamer {
 
       const message = tx.transaction.message;
 
-      let instructions = message.instructions || message.compiledInstructions;
+      const outerInstructions =
+        message.instructions || message.compiledInstructions || [];
 
-      if (!Array.isArray(instructions)) return false;
+      const innerInstructionsArray = Array.isArray(tx.meta?.innerInstructions)
+        ? tx.meta.innerInstructions.flatMap((ixGroup: any) => {
+            if (Array.isArray(ixGroup?.instructions)) return ixGroup.instructions;
+            return [ixGroup];
+          })
+        : [];
 
-      const innerInstructions = tx.meta?.innerInstructions ?? [];
+      const allInstructions = [...outerInstructions, ...innerInstructionsArray];
 
-      instructions = {...instructions, ...innerInstructions};
-      
-      for (const ix of instructions) {
-        const name = ix?.data?.name;
+      if (!Array.isArray(allInstructions) || allInstructions.length === 0)
+        return false;
+
+      for (const ix of allInstructions) {
+        const name = ix?.data?.name || ix?.name;
 
         if (name && this.onInstructionCallbacks[name]) {
           this.onInstructionCallbacks[name](tx);
-          break; // Trigger once per tx if you want
+          break; // trigger once per transaction
         }
       }
     } catch (err) {
