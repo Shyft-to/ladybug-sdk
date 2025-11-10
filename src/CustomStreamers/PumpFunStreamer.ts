@@ -43,6 +43,11 @@ export class PumpFunStreamer {
   private instructionEnum: Record<string, string> = {};
   private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
 
+  /**
+   * Initializes the PumpFunStreamer, which can be used to stream pumpFun transactions and accounts
+   * @param endpoint Accepts your Yellowstone gRPC Connection URL
+   * @param xToken Accepts your X-token, which is used for authentication
+   */
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
 
@@ -84,26 +89,55 @@ export class PumpFunStreamer {
   //   this.onDataCallback = callback;
   // }
 
+  /**
+   * Fired when an error occurs
+   * @param callback Accepts a callback function, which takes the error as input
+   */
   onError(callback: (error: any) => void) {
     this.onErrorCallback = callback;
   }
 
+
+  /**
+   * Fired when the stream has ended
+   * @param callback Accepts a callback function, which takes no arguments
+   */
   onEnd(callback: () => void) {
     this.onEndCallback = callback;
   }
 
+  /**
+   * Fired when the stream has been closed
+   * @param callback Accepts a callback function, which takes no arguments
+   */
   onClose(callback: () => void) {
     this.onCloseCallback = callback;
   }
 
+  /**
+   * Fired when a transaction has been detected
+   * @param callback Accepts a callback function, which takes the detected transaction as input
+   */
   onTransaction(callback: (tx: any) => void) {
     this.onTransactionCallback = callback;
   }
 
+  
+  /**
+   * Fired when an account has been detected
+   * @param callback Accepts a callback function, which takes the detected account as input
+   */
   onAccount(callback: (acc: any) => void) {
     this.onAccountCallback = callback;
   }
 
+  
+  /**
+   * Fires when a transaction of a specific type is detected.
+   * The type should be one of the following: "buy", "sell", "tokenLaunch", "tokenMigration".
+   * @param type The type of transaction to watch for
+   * @param callback The callback function to call when a transaction of the specified type is detected
+   */
   onDetectedTransactionType<T extends keyof TransactionTypeCallbacks>(
     type: T,
     callback: TransactionTypeCallbacks[T]
@@ -111,6 +145,13 @@ export class PumpFunStreamer {
     this.onDetectedTypeCallbacks[type] = callback;
   }
 
+  
+  /**
+   * Fires when a transaction of a specific instruction type is detected.
+   * The type should be one of the following: "createAccount", "createMint", "createPool", "createFarm", "createVote", "createToken", "createAuctionHouse", "createNFT", "createStakePool", "createStake", "createStakePosition", "createStakeWithdraw", "createStakeDeposit", "createStakeMint", "createStakeBurn", "createStakeRedeem".
+   * @param type The type of instruction to watch for
+   * @param callback The callback function to call when a transaction of the specified type is detected
+   */
   onInstruction(type: keyof typeof this.instructionEnum, callback: (tx: any) => void) {
     this.onInstructionCallbacks[type] = callback;
   }
@@ -139,6 +180,14 @@ export class PumpFunStreamer {
     }
   }
 
+  
+  /**
+   * Starts a transaction stream, which will keep running until
+   * `stopStreamingTransactions` is called. The stream will retry
+   * indefinitely if an error occurs, with a maximum delay of 30s.
+   * The delay between retries will double each time an error occurs,
+   * up to a maximum of 30s.
+   */
   async startStreamingTransactions() {
     this.transactionRunning = true;
     let retryDelay = 1000;
@@ -165,6 +214,11 @@ export class PumpFunStreamer {
     }
   }
 
+  /**
+   * Stops the transaction stream if it is currently running.
+   * This will prevent any further transactions from being received until
+   * `startStreamingTransactions` is called again.
+   */
   stopStreamingTransactions() {
     console.log("Stopping transaction stream...");
     this.transactionRunning = false;
@@ -172,6 +226,12 @@ export class PumpFunStreamer {
     this.transactionStream = undefined;
   }
 
+  /**
+   * Starts a stream of account data, which will be sent to the `onData`
+   * callback as it is received. The stream will automatically reconnect
+   * in the event of an error, with an exponential backoff up to
+   * a maximum of 30s. To stop the stream, call `stopStreamingAccounts`.
+  */
   async startStreamingAccounts() {
     this.accountRunning = true;
     let retryDelay = 1000;
@@ -195,6 +255,11 @@ export class PumpFunStreamer {
     }
   }
 
+  /**
+   * Stops the account stream if it is currently running.
+   * This will prevent any further account data from being received until
+   * `startStreamingAccounts` is called again.
+   */
   stopStreamingAccounts() {
     console.log("Stopping account stream...");
     this.accountRunning = false;
