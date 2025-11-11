@@ -4,7 +4,7 @@ import {
 } from "@triton-one/yellowstone-grpc";
 import Client from "@triton-one/yellowstone-grpc";
 import { Parser } from "../Parsers/Parser";
-import pumpIdl from "../IdlFiles/pump_0.1.0.json";
+import pumpIdl from "../IdlFiles/pump_amm_0.1.0.json";
 import { PublicKey } from "@solana/web3.js";
 import { Idl } from "@coral-xyz/anchor";
 
@@ -20,13 +20,12 @@ type TransactionTypeCallbacks = {
 export class PumpAmmStreamer {
   private client: Client;
   private request: SubscribeRequest;
-  private pumpFunAddress: string =
+  private pumpAmmAddress: string =
     "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA";
-  private addresses: [string] = [this.pumpFunAddress];
+  private addresses: [string] = [this.pumpAmmAddress];
   private running: boolean = false;
   private stream?: any;
   private parser: Parser;
-  private transactionTypesToWatch: instructionType[] = [];
   private transactionRunning = false;
   private accountRunning = false;
 
@@ -40,14 +39,22 @@ export class PumpAmmStreamer {
   private onTransactionCallback?: (tx: any) => void;
   private onAccountCallback?: (acc: any) => void;
   private onDetectedTypeCallbacks: Partial<TransactionTypeCallbacks> = {};
+  private instructionEnum: Record<string, string> = {};
+  private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
 
+  /**
+   * Initializes the PumpAmmStreamer, which can be used to stream pumpAmm transactions and accounts
+   * @param endpoint Accepts your Yellowstone gRPC Connection URL
+   * @param xToken Accepts your X-token, which is used for authentication
+   */
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
 
     const parser = new Parser();
     parser.addIDL(new PublicKey(this.addresses[0]), pumpIdl as Idl);
     this.parser = parser;
-
+    this.initializeInstructionEnum(pumpIdl);
+    
     this.request = {
       accounts: {},
       slots: {},
@@ -71,35 +78,81 @@ export class PumpAmmStreamer {
     };
   }
 
+  private initializeInstructionEnum(idl: any) {
+    this.instructionEnum = Object.fromEntries(
+      idl.instructions.map((ix: any) => [ix.name, ix.name])
+    );
+  }
+
+
   // onData(callback: (data: any) => void) {
   //   this.onDataCallback = callback;
   // }
 
+  /**
+   * Sets a callback function to be called when an error occurs while streaming transactions or accounts.
+   * The callback function takes one argument, which is the error that occurred.
+   * @param callback The callback function to call when an error occurs
+   */
   onError(callback: (error: any) => void) {
     this.onErrorCallback = callback;
   }
 
+  /**
+   * Fired when the stream has ended
+   * @param callback Accepts a callback function, which takes no arguments
+   */
   onEnd(callback: () => void) {
     this.onEndCallback = callback;
   }
 
+  /**
+   * Fired when the stream has been closed
+   * @param callback Accepts a callback function, which takes no arguments
+   */
   onClose(callback: () => void) {
     this.onCloseCallback = callback;
   }
 
+  /**
+   * Sets a callback function to be called when a transaction is detected.
+   * The callback function takes one argument, which is the detected transaction.
+   * @param callback The callback function to call when a transaction is detected
+   */
   onTransaction(callback: (tx: any) => void) {
     this.onTransactionCallback = callback;
   }
 
+  /**
+   * Sets a callback function to be called when an account is detected.
+   * The callback function takes one argument, which is the detected account.
+   * @param callback The callback function to call when an account is detected
+   */
   onAccount(callback: (acc: any) => void) {
     this.onAccountCallback = callback;
   }
 
+  /**
+   * Sets a callback function to be called when a transaction of a specific type is detected.
+   * The type should be one of the following: "buy", "sell", "tokenLaunch", "tokenMigration".
+   * @param type The type of transaction to watch for
+   * @param callback The callback function to call when a transaction of the specified type is detected
+   */
   onDetectedTransactionType<T extends keyof TransactionTypeCallbacks>(
     type: T,
     callback: TransactionTypeCallbacks[T]
   ) {
     this.onDetectedTypeCallbacks[type] = callback;
+  }
+
+  /**
+   * Sets a callback function to be called when an instruction of a specific type is detected.
+   * The type should be one of the following: "createAccount", "createMint", "createPool", "createFarm", "createVote", "createToken", "createAuctionHouse", "createNFT", "createStakePool", "createStake", "createStakePosition", "createStakeWithdraw", "createStakeDeposit", "createStakeMint", "createStakeBurn", "createStakeRedeem".
+   * @param type The type of instruction to watch for
+   * @param callback The callback function to call when an instruction of the specified type is detected
+   */
+  onInstruction(type: keyof typeof this.instructionEnum, callback: (tx: any) => void) {
+    this.onInstructionCallbacks[type] = callback;
   }
 
   private async pushUpdate() {
@@ -126,6 +179,13 @@ export class PumpAmmStreamer {
     }
   }
 
+  /**
+   * Starts a transaction stream, which will keep running until
+   * `stopStreamingTransactions` is called. The stream will retry
+   * indefinitely if an error occurs, with a maximum delay of 30s.
+   * The delay between retries will double each time an error occurs,
+   * up to a maximum of 30s.
+   */
   async startStreamingTransactions() {
     this.transactionRunning = true;
     let retryDelay = 1000;
@@ -152,6 +212,11 @@ export class PumpAmmStreamer {
     }
   }
 
+  /**
+   * Stops the transaction stream if it is currently running.
+   * This will prevent any further transactions from being received until
+   * `startStreamingTransactions` is called again.
+   */
   stopStreamingTransactions() {
     console.log("Stopping transaction stream...");
     this.transactionRunning = false;
@@ -159,6 +224,11 @@ export class PumpAmmStreamer {
     this.transactionStream = undefined;
   }
 
+  /**
+   * Starts a stream of account data, which will be sent to the `onData` callback as it is received.
+   * The stream will automatically reconnect in the event of an error, with an exponential backoff up to
+   * a maximum of 30s. To stop the stream, call `stopStreamingAccounts`.
+   */
   async startStreamingAccounts() {
     this.accountRunning = true;
     let retryDelay = 1000;
@@ -182,6 +252,11 @@ export class PumpAmmStreamer {
     }
   }
 
+  /**
+   * Stops the account stream if it is currently running.
+   * This will prevent any further account data from being received until
+   * `startStreamingAccounts` is called again.
+   */
   stopStreamingAccounts() {
     console.log("Stopping account stream...");
     this.accountRunning = false;
@@ -216,6 +291,7 @@ export class PumpAmmStreamer {
           if (this.onTransactionCallback) this.onTransactionCallback(parsed);
 
           this.detectAndTriggerTransactionType(parsed);
+          this.detectInstructionType(parsed);
         }
       } catch (error) {
         if (this.onErrorCallback) this.onErrorCallback(error);
@@ -337,6 +413,7 @@ export class PumpAmmStreamer {
           if (this.onTransactionCallback) this.onTransactionCallback(parsed);
 
           this.detectAndTriggerTransactionType(parsed);
+          // this.detectInstructionType(parsed);
         } else if (data.account) {
           const parsed = this.parser.parseAccount(data.account);
           if (this.onAccountCallback) this.onAccountCallback(parsed);
@@ -356,14 +433,14 @@ export class PumpAmmStreamer {
     try {
       if (
         this.onDetectedTypeCallbacks.tokenMigration &&
-        this.isPumpFunMigrationTransaction(tx)
+        this.isPumpAmmMigrationTransaction(tx)
       ) {
         this.onDetectedTypeCallbacks.tokenMigration(tx);
         return;
       }
 
-      const mint = this.newPoolTxn(tx);
-      if (this.onDetectedTypeCallbacks.newPool) {
+      const createFound = this.newPoolTxn(tx);
+      if (createFound && this.onDetectedTypeCallbacks.newPool) {
         this.onDetectedTypeCallbacks.newPool(tx);
         return;
       }
@@ -384,7 +461,41 @@ export class PumpAmmStreamer {
     }
   }
 
-  private isPumpFunMigrationTransaction(parsedTxn: any): boolean {
+  private detectInstructionType(tx: any) {
+    try {
+      if (!tx?.transaction?.message) return false;
+
+      const message = tx.transaction.message;
+
+      const outerInstructions =
+        message.instructions || message.compiledInstructions || [];
+
+      const innerInstructionsArray = Array.isArray(tx.meta?.innerInstructions)
+        ? tx.meta.innerInstructions.flatMap((ixGroup: any) => {
+            if (Array.isArray(ixGroup?.instructions)) return ixGroup.instructions;
+            return [ixGroup];
+          })
+        : [];
+
+      const allInstructions = [...outerInstructions, ...innerInstructionsArray];
+
+      if (!Array.isArray(allInstructions) || allInstructions.length === 0)
+        return false;
+
+      for (const ix of allInstructions) {
+        const name = ix?.data?.name || ix?.name;
+
+        if (name && this.onInstructionCallbacks[name]) {
+          this.onInstructionCallbacks[name](tx);
+          break; // trigger once per transaction
+        }
+      }
+    } catch (err) {
+      if (this.onErrorCallback) this.onErrorCallback(err);
+    }
+  }
+
+  private isPumpAmmMigrationTransaction(parsedTxn: any): boolean {
     if (!parsedTxn?.transaction?.message) return false;
 
     const message = parsedTxn.transaction.message;
@@ -409,11 +520,11 @@ export class PumpAmmStreamer {
 
     if (!Array.isArray(instructions)) return false;
 
-    const migrateFound = instructions.some(
+    const createFound = instructions.some(
       (ix: any) => ix?.name?.toLowerCase?.() === "create_pool"
     );
 
-    return migrateFound;
+    return createFound;
   }
 
   private getNewTokenMint(tx: any): string | null {
@@ -458,14 +569,14 @@ export class PumpAmmStreamer {
     const completeInnerInstructions = tx.meta?.innerInstructions ?? [];
 
     const parsedInstruction: { programId: string, accounts: string[], data: any }[] = completeParsedInstruction.filter(
-      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpAmmAddress
     );
 
     const innerInstructions: { outerIndex: number, programId: string, accounts: string[], data: any }[] = completeInnerInstructions.filter(
-      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpAmmAddress
     );
 
-    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpFunAddress).find(
+    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpAmmAddress).find(
       (ix) => ix?.data?.name === "create"
     ) || innerInstructions?.find((ix) => ix?.data?.name === "create");
 
@@ -499,14 +610,14 @@ export class PumpAmmStreamer {
     const completeInnerInstructions = tx.meta?.innerInstructions ?? [];
 
     const parsedInstruction: { programId: string, accounts: string[], data: any }[] = completeParsedInstruction.filter(
-      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+      (ix: { programId: string, accounts: string[], data: any }) => ix.programId === this.pumpAmmAddress
     );
 
     const innerInstructions: { outerIndex: number, programId: string, accounts: string[], data: any }[] = completeInnerInstructions.filter(
-      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpFunAddress
+      (ix: { outerIndex: number, programId: string, accounts: string[], data: any }) => ix.programId === this.pumpAmmAddress
     );
 
-    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpFunAddress).find(
+    const swapInstruction = parsedInstruction?.filter((ix) => ix.programId === this.pumpAmmAddress).find(
       (ix) => ix?.data?.name === "buy" || ix?.data?.name === "sell"
     ) || innerInstructions?.find((ix) => ix?.data?.name === "buy" || ix?.data?.name === "sell");
 

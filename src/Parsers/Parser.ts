@@ -73,6 +73,11 @@ export class Parser {
     solanaDataParsers: Map<string, ParserParams> = new Map();
     // accountParsers: Map<string, ParserParams> = new Map();
 
+    /**
+     * This parser uses the IDLs to parse the transaction and accounts data. A parser can take multiple IDLs.
+     * @param programId - The PublicKey of the program.
+     * @param idl - The IDL to add.
+     */
     addIDL(programId: PublicKey, idl: CoralIdl | SerumIdl) {
         // this.transactionParsers.set(programId.toBase58(), { programId, idl, isCoral: TransactionParser.isCoralIdl(idl), coder: this.coder });
         let parserParams: any = {
@@ -120,6 +125,12 @@ export class Parser {
         // this.accountParsers.set(programId.toString(), parserParams);
     }
 
+    /**
+     * Checks if an IDL is a Coral IDL or not.
+     * A Coral IDL is one which has an "address" field or an "instructions" field with at least one instruction with a "discriminator" field.
+     * @param idl - The IDL to check.
+     * @returns True if the IDL is a Coral IDL, false otherwise.
+     */
     static isCoralIdl(idl: AnyIdl): idl is CoralIdl {
         return (
             "address" in idl ||
@@ -130,7 +141,15 @@ export class Parser {
         );
     }
 
-    getAccountKeys(
+    /**
+     * Retrieves the account keys from a transaction message and its associated transaction meta data.
+     * The returned array will contain the static account keys from the message, as well as the loaded addresses from the meta data.
+     * The loaded addresses are split into two categories: writable and readonly.
+     * @param {Message|MessageV0} message - The transaction message.
+     * @param {VersionedTransactionResponse["meta"]} meta - The transaction meta data.
+     * @returns {string[]} An array of account keys.
+     */
+    private getAccountKeys(
         message: Message | MessageV0,
         meta: VersionedTransactionResponse["meta"]
     ) {
@@ -146,7 +165,15 @@ export class Parser {
 
         return keys;
     }
-    getParsedCompiledInstruction(
+    
+    /**
+     * Parses the compiled instructions in the transaction message and returns a decoded array of instructions.
+     * The decoded array contains the programId, accounts, and decoded instruction data.
+     * @param {MessageCompiledInstruction[]} compiledInstructions - The compiled instructions from the transaction message.
+     * @param {string[]} allKeys - The list of all account keys in the transaction message.
+     * @returns { { programId: string; accounts: string[]; data: any }[] } - The decoded array of instructions.
+     */
+    private getParsedCompiledInstruction(
         compiledInstructions: MessageCompiledInstruction[],
         allKeys: string[]
     ) {
@@ -187,7 +214,7 @@ export class Parser {
         return decoded;
     }
 
-    parseInnerInstructions(
+    private parseInnerInstructions(
         innerInstructions:
             | {
                 index: number;
@@ -246,7 +273,7 @@ export class Parser {
         return decoded;
     }
 
-    parseEvents(txn: VersionedTransactionResponse, allKeys: string[]) {
+    private parseEvents(txn: VersionedTransactionResponse, allKeys: string[]) {
         try {
             let programIds: string[] = [];
 
@@ -284,6 +311,16 @@ export class Parser {
         }   
     }
 
+    /**
+     * Parse a transaction and return a new transaction with parsed instructions and events.
+     * The parsed transaction will have the following properties:
+     * - transaction.message.instructions: an array of parsed compiled instructions
+     * - transaction.message.events: an array of parsed events
+     * - meta.innerInstructions: an array of parsed inner instructions
+     * 
+     * @param {VersionedTransactionResponse} tx - The transaction to parse
+     * @returns {VersionedTransactionResponse} - The parsed transaction
+     */
     parseTransaction(tx: VersionedTransactionResponse) {
         const allKeys = this.getAccountKeys(tx.transaction.message, tx.meta);
         const parsedCompiledInstruction = this.getParsedCompiledInstruction(
@@ -333,6 +370,22 @@ export class Parser {
         return txWithParsed;
     }
 
+    /**
+     * Convert a transaction message to a VersionedMessage.
+     * If the message is legacy, it will be converted to a VersionedMessage with the following properties:
+     * - header: the header of the message
+     * - recentBlockhash: the recent block hash of the message
+     * - accountKeys: an array of account public keys
+     * - instructions: an array of parsed compiled instructions
+     * If the message is not legacy, it will be converted to a VersionedMessage with the following properties:
+     * - header: the header of the message
+     * - recentBlockhash: the recent block hash of the message
+     * - staticAccountKeys: an array of account public keys
+     * - compiledInstructions: an array of parsed compiled instructions
+     * - addressTableLookups: an array of address table lookups
+     * @param {any} message - The transaction message to convert
+     * @returns {VersionedMessage} - The converted transaction message
+     */
     formTxnMessage(message: any): VersionedMessage {
         if (!message.versioned) {
             return new Message({
@@ -413,6 +466,12 @@ export class Parser {
         }
     }
 
+    /**
+     * Formats a transaction object returned from the gRPC API into a VersionedTransactionResponse object.
+     * @param data - The transaction object returned from the gRPC API.
+     * @param time - The block time of the transaction.
+     * @returns A VersionedTransactionResponse object.
+     */
     public formatGrpcTransactionData(
         data: any,
         time: number
@@ -519,6 +578,12 @@ export class Parser {
         }
     }
 
+    /**
+     * Parse the account data.
+     * @param {AccountInfo} data - The data of the account to parse.
+     * @returns {object} - The parsed account data.
+     * @throws {Error} - If the account parser is not found for the account owner.
+     */
     parseAccount(data: AccountInfo) {
         if(!this.solanaDataParsers.has(data.owner.toBase58())) {
             throw new Error(`Account parser not found for ${data.owner.toBase58()}`);
@@ -540,6 +605,12 @@ export class Parser {
         }
     }
 
+    /**
+     * Data received from gRPC is slightly different from AccountInfo. This function formats a GeyserAccountType (gRPC Received Data) 
+     * object into an AccountInfo object.
+     * @param {GeyserAccountType} geyserAcc - The GeyserAccountType object to format.
+     * @returns {AccountInfo} - The formatted AccountInfo object.
+     */
     formatGeyserAccountData(geyserAcc: GeyserAccountType): AccountInfo {
         return {
             slot: Number(geyserAcc.slot),
