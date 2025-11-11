@@ -20,6 +20,11 @@ export class AccountStreamer {
 
   private parser: Parser | undefined = undefined;
 
+/**
+ * Initializes the AccountStreamer, which can be used to stream account data and parse it using the provided parser
+ * @param endpoint Accepts your Yellowstone gRPC Connection URL
+ * @param xToken Accepts your X-token, which is used for authentication
+ */
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
 
@@ -38,18 +43,37 @@ export class AccountStreamer {
   }
 
   
+  /**
+   * Sets a callback function to be called when account data is received.
+   * The callback function takes a single parameter, which is the account data.
+   * @param callback The callback function to call when account data is received.
+   */
   onData(callback: (data: any) => void) {
     this.onDataCallback = callback;
   }
 
+  /**
+   * Sets a callback function to be called when an error occurs while streaming account data.
+   * The callback function takes a single parameter, which is the error that occurred.
+   * @param callback The callback function to call when an error occurs
+   */
   onError(callback: (err: any) => void) {
     this.onErrorCallback = callback;
   }
 
+/**
+ * Fired when the stream has ended. This is called after the stream has been ended and the stream is no longer available.
+ * @param callback Accepts a callback function, which takes no arguments
+ */
   onEnd(callback: () => void) {
     this.onEndCallback = callback;
   }
 
+  /**
+   * Sets a callback function to be called when the stream has been closed.
+   * This is called after the stream has been ended and the stream is no longer available.
+   * @param callback Accepts a callback function, which takes no arguments
+   */
   onClose(callback: () => void) {
     this.onCloseCallback = callback;
   }
@@ -78,21 +102,41 @@ export class AccountStreamer {
     });
   }
 
+  /**
+   * Adds a list of addresses to the account stream request.
+   * Accounts from these addresses will be included in the account stream.
+   * @param newAddresses The list of addresses to add to the account stream request.
+   */
   async addAddresses(newAddresses: string[]) {
     newAddresses.forEach((addr) => this.addresses.add(addr));
     await this.pushUpdate();
   }
 
+  /**
+   * Removes a list of addresses from the account stream request.
+   * Accounts from these addresses will no longer be included in the account stream.
+   * @param removeList The list of addresses to remove from the account stream request.
+   */
   async removeAddresses(removeList: string[]) {
     removeList.forEach((addr) => this.addresses.delete(addr));
     await this.pushUpdate();
   }
 
+  /**
+   * Adds a list of addresses to the account stream request as owners.
+   * Accounts for which these addresses are owners will be included in the account stream.
+   * @param newOwners The list of addresses to add to the account stream request as owners.
+   */
   async addOwners(newOwners: string[]) {
     newOwners.forEach((addr) => this.owners.add(addr));
     await this.pushUpdate();
   }
 
+  /**
+   * Removes a list of addresses from the account stream request as owners.
+   * Accounts for which these addresses are no longer owners will no longer be included in the account stream.
+   * @param removeList The list of addresses to remove from the account stream request as owners.
+   */
   async removeOwners(removeList: string[]) {
     removeList.forEach((addr) => this.owners.delete(addr));
     await this.pushUpdate();
@@ -103,6 +147,11 @@ export class AccountStreamer {
   }
 
 
+  /**
+   * Starts the account stream, which will keep running until stop is called.
+   * The stream will retry indefinitely if an error occurs, with a maximum delay of 30s.
+   * The delay between retries will double each time an error occurs, up to a maximum of 30s.
+   */
   async start() {
     this.running = true;
     while (this.running) {
@@ -117,6 +166,11 @@ export class AccountStreamer {
     }
   }
 
+  /**
+   * Stops the account stream if it is currently running.
+   * This will prevent any further accounts from being received until
+   * `start` is called again.
+   */
   stop() {
     this.running = false;
     this.stream?.cancel();

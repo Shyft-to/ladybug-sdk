@@ -18,6 +18,11 @@ export class TransactionStreamer {
   private onEndCallback?: () => void;
   private onCloseCallback?: () => void;
 
+  /**
+   * Initializes the TransactionStreamer, which can be used to stream transactions and parse them using the provided parser
+   * @param endpoint Accepts your Yellowstone gRPC Connection URL
+   * @param xToken Accepts your X-token, which is used for authentication
+   */
   constructor(endpoint: string, xToken?: string) {
     this.client = new Client(endpoint, xToken, undefined);
 
@@ -36,18 +41,37 @@ export class TransactionStreamer {
   }
 
  
+  /**
+   * Sets a callback function to be called when a transaction is received.
+   * The callback function takes a single parameter, which is the transaction data.
+   * @param callback The callback function to call when a transaction is received.
+   */
   onData(callback: (data: any) => void) {
     this.onDataCallback = callback;
   }
 
+  /**
+   * Sets a callback function to be called when an error occurs while streaming transactions.
+   * The callback function takes one argument, which is the error that occurred.
+   * @param callback The callback function to call when an error occurs
+   */
   onError(callback: (error: any) => void) {
     this.onErrorCallback = callback;
   }
 
+  /**
+   * Fired when the stream has ended.
+   * @param callback Accepts a callback function, which takes no arguments
+   */
   onEnd(callback: () => void) {
     this.onEndCallback = callback;
   }
 
+  /**
+   * Sets a callback function to be called when the stream has been closed.
+   * This is called after the stream has been ended and the stream is no longer available.
+   * @param callback The callback function to call when the stream has been closed.
+   */  
   onClose(callback: () => void) {
     this.onCloseCallback = callback;
   }
@@ -79,20 +103,39 @@ export class TransactionStreamer {
     });
   }
 
+  /**
+   * Adds a list of addresses to the transaction stream request.
+   * Transactions from these addresses will be included in the transaction stream.
+   * @param newAddresses The list of addresses to add to the transaction stream request.
+  */
   async addAddresses(newAddresses: string[]) {
     newAddresses.forEach((addr) => this.addresses.add(addr));
     await this.pushUpdate();
   }
 
+  /**
+   * Removes a list of addresses from the transaction stream request.
+   * Transactions from these addresses will no longer be included in the transaction stream.
+   * @param removeList The list of addresses to remove from the transaction stream request.
+   */
   async removeAddresses(removeList: string[]) {
     removeList.forEach((addr) => this.addresses.delete(addr));
     await this.pushUpdate();
   }
 
+  /**
+   * Adds a parser, which is created using the Parser class, to the transaction streamer. The parser is used to parse the transactions and accounts data received from the stream.
+   * @param parser The parser to add to the transaction streamer.
+   */
   async addParser(parser: Parser) {
     this.parser = parser;
   }
 
+  /**
+   * Starts the transaction stream, which will keep running until stop is called.
+   * The stream will retry indefinitely if an error occurs, with a maximum delay of 30s.
+   * The delay between retries will double each time an error occurs, up to a maximum of 30s.
+   */  
   async start() {
     this.running = true;
     while (this.running) {
@@ -106,6 +149,11 @@ export class TransactionStreamer {
     }
   }
 
+  /**
+   * Stops the transaction stream if it is currently running.
+   * This will prevent any further transactions from being received until
+   * `start` is called again.
+   */
   stop() {
     this.running = false;
     this.stream?.cancel();
