@@ -428,6 +428,9 @@ export class Parser {
             allKeys
         );
         const parsedEvents = this.parseEvents(tx, allKeys);
+        const txMessage = tx.transaction.message;
+        
+        
         if(tx.version === "legacy") {
             const txWithParsed = {
                 ...tx,
@@ -435,6 +438,7 @@ export class Parser {
                     ...tx.transaction,
                     message: {
                         ...tx.transaction.message,
+                        accountKeys: txMessage.staticAccountKeys.map((key) => key.toBase58()),
                         instructions: parsedCompiledInstruction,
                         events: plaintextFormatter(parsedEvents)
                     },
@@ -453,6 +457,7 @@ export class Parser {
                 ...tx.transaction,
                 message: {
                     ...tx.transaction.message,
+                    staticAccountKeys: txMessage.staticAccountKeys.map((key) => key.toBase58()),
                     compiledInstructions: parsedCompiledInstruction,
                     events: plaintextFormatter(parsedEvents)
                 },
