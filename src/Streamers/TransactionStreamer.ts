@@ -42,14 +42,6 @@ export class TransactionStreamer {
     };
   }
 
-  loadIdl(idl: any) {
-    if (!idl || !Array.isArray(idl.instructions)) {
-      throw new Error("Invalid IDL: Missing instructions array");
-    }
-    this.idlInstructionNames = new Set(idl.instructions.map((ix:any) => ix.name));
-    console.log("Loaded instruction names from IDL:", [...this.idlInstructionNames]);
-  }
-
    /**
    * Registers a callback to be triggered when a specific instruction is detected in a transaction.
    * @param instructionName The instruction name (must exist in IDL)
@@ -152,6 +144,7 @@ export class TransactionStreamer {
    */
   async addParser(parser: Parser) {
     this.parser = parser;
+    this.idlInstructionNames = parser.getAllInstructions();
   }
 
   /**

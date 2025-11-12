@@ -152,7 +152,7 @@ export class PumpFunStreamer {
    * @param type The type of instruction to watch for
    * @param callback The callback function to call when a transaction of the specified type is detected
    */
-  onInstruction(type: keyof typeof this.instructionEnum, callback: (tx: any) => void) {
+  onDetectInstruction(type: keyof typeof this.instructionEnum, callback: (tx: any) => void) {
     this.onInstructionCallbacks[type] = callback;
   }
 

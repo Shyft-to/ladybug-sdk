@@ -69,9 +69,94 @@ export type ParserParams = {
     eventParser?: CoralEventParser | SerumEventParser;
 }
 
+export type ReadableTransactionResponse = {
+  slot: number;
+  blockTime?: number | null;
+  version: "legacy" | 0;
+  transaction: {
+    signatures: string[];
+    message: ReadableMessage;
+  };
+  meta: ReadableTransactionMeta | null;
+};
+
+/**
+ * A readable message (legacy or v0),
+ * where all PublicKeys are strings.
+ */
+export type ReadableMessage =
+  | {
+      version: "legacy";
+      header: MessageHeader;
+      accountKeys: string[];
+      recentBlockhash: string;
+      instructions: ReadableCompiledInstruction[];
+      events?: any[];
+    }
+  | {
+      version: 0;
+      header: MessageHeader;
+      staticAccountKeys: string[];
+      recentBlockhash: string;
+      compiledInstructions: ReadableCompiledInstruction[];
+      addressTableLookups: ReadableAddressTableLookup[];
+      events?: any[];
+    };
+
+/**
+ * A readable version of an instruction with string keys.
+ */
+export type ReadableCompiledInstruction = {
+  programId: string;
+  accounts: string[];
+  data: any;
+};
+
+/**
+ * Readable version of the address lookup structure.
+ */
+export type ReadableAddressTableLookup = {
+  accountKey: string;
+  writableIndexes: number[];
+  readonlyIndexes: number[];
+};
+
+/**
+ * Simplified readable transaction meta.
+ * You can expand it if needed to include token balances, logs, etc.
+ */
+export type ReadableTransactionMeta = {
+  fee: number;
+  err: any;
+  preBalances: number[];
+  postBalances: number[];
+  logMessages?: string[];
+  innerInstructions?: ReadableInnerInstruction[];
+};
+
+/**
+ * Readable version of inner instructions.
+ */
+export type ReadableInnerInstruction = {
+  outerIndex: number;
+  programId: string;
+  accounts: string[];
+  data: any;
+};
+
+/**
+ * Message header (unchanged)
+ */
+export type MessageHeader = {
+  numRequiredSignatures: number;
+  numReadonlySignedAccounts: number;
+  numReadonlyUnsignedAccounts: number;
+};
+
 export class Parser {
     solanaDataParsers: Map<string, ParserParams> = new Map();
     // accountParsers: Map<string, ParserParams> = new Map();
+    private instructionSet: Set<string> = new Set();
 
     /**
      * This parser uses the IDLs to parse the transaction and accounts data. A parser can take multiple IDLs.
@@ -122,6 +207,9 @@ export class Parser {
         }
         
         this.solanaDataParsers.set(programId.toBase58(), parserParams);
+        idl.instructions.forEach((ix) => {
+            this.instructionSet.add(ix.name);
+        });
         // this.accountParsers.set(programId.toString(), parserParams);
     }
 
@@ -139,6 +227,14 @@ export class Parser {
                 idl.instructions.length > 0 &&
                 "discriminator" in idl.instructions[0])
         );
+    }
+
+    /**
+     * Returns a set of all the instructions in the IDLs combined.
+     * @returns A set of all the instructions in the IDLs.
+     */
+    public getAllInstructions(): Set<string> {
+        return this.instructionSet;
     }
 
     /**
@@ -201,7 +297,7 @@ export class Parser {
                 decodedInstruction = plaintextFormatter(coder.instruction.decode(Buffer.from(ix.data)));
             } catch (error) {
                 console.log(`Error decoding instruction by idl: ${ix.data} for program ${programId}`);
-                decodedInstruction = ix.data;
+                decodedInstruction = plaintextFormatter(ix.data) || ix.data;
             }
 
             decoded.push({
