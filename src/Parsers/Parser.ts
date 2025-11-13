@@ -7,6 +7,7 @@ import {
   MessageCompiledInstruction,
   VersionedMessage,
   ConfirmedTransactionMeta,
+  MessageHeader,
 } from "@solana/web3.js";
 
 import {
@@ -35,13 +36,18 @@ import { IdlField as SerumIdlField } from "@project-serum/anchor/dist/cjs/idl";
 import { intersection } from "lodash";
 
 import { serializeStruct } from "../utils/account-formatter";
-import { plaintextFormatter } from "../utils/common";
+import { getAccountMetasFromStrings, plaintextFormatter } from "../utils/common";
 
 import {
   ReadableTransactionResponse,
   ReadableLegacyTransactionResponse,
   ReadableV0TransactionResponse,
 } from "../types";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { decodeTokenInstruction } from "./token-program-parser";
+import { SYSTEM_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/native/system";
+import { decodeSystemInstruction } from "./system-program-parser";
+import { decodeToken2022Instruction } from "./token-2022-parser";
 
 type AnyIdl = CoralIdl | SerumIdl;
 
@@ -81,6 +87,7 @@ export type ParserParams = {
 
 export class Parser {
   solanaDataParsers: Map<string, ParserParams> = new Map();
+  parseDefaultInstructions: boolean = true;
   // accountParsers: Map<string, ParserParams> = new Map();
   private instructionSet: Set<string> = new Set();
 
@@ -204,7 +211,9 @@ export class Parser {
    */
   private getParsedCompiledInstruction(
     compiledInstructions: MessageCompiledInstruction[],
-    allKeys: string[]
+    allKeys: string[],
+    messageHeader: MessageHeader, 
+    accountKeys: PublicKey[]
   ) {
     const decoded: {
       programId: string;
@@ -215,6 +224,38 @@ export class Parser {
     for (const ix of compiledInstructions) {
       const programId = allKeys[ix.programIdIndex];
       const accounts = ix.accountKeyIndexes.map((a) => allKeys[a]);
+       if(this.parseDefaultInstructions) {
+        if(programId === TOKEN_PROGRAM_ID.toBase58()) {
+          const decodedIx = decodeTokenInstruction(ix.data);
+          decoded.push({
+            programId,
+            accounts,
+            data: decodedIx ? decodedIx.data.toString(): "unknown",
+          });
+          continue;
+        }
+        if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
+          const keys = getAccountMetasFromStrings(accountKeys, messageHeader);
+          const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+          decoded.push({
+            programId,
+            accounts,
+            data: decodedIx ? decodedIx.toString(): "unknown",
+          });
+          continue;
+        }
+        if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
+          const keys = getAccountMetasFromStrings(accountKeys, messageHeader);
+          const decodedIx = decodeToken2022Instruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+          decoded.push({
+            programId,
+            accounts,
+            data: decodedIx ? decodedIx.toString(): "unknown",
+          });
+          continue;
+        }
+      }
+
       if (!programId || !this.solanaDataParsers.has(programId)) {
         //console.log(`Parser not available for programId ${programId}`);
         decoded.push({
@@ -255,7 +296,9 @@ export class Parser {
         }[]
       | null
       | undefined,
-    allKeys: readonly string[]
+    allKeys: readonly string[],
+    messageHeader: MessageHeader, 
+    accountKeys: PublicKey[]
   ): {
     outerIndex: number;
     programId: string;
@@ -279,6 +322,41 @@ export class Parser {
       for (const ix of instructions) {
         const programId = allKeys[ix.programIdIndex];
         const accounts = ix.accounts.map((i) => allKeys[i]);
+
+        if(this.parseDefaultInstructions) {
+          if(programId === TOKEN_PROGRAM_ID.toBase58()) {
+            const decodedIx = decodeTokenInstruction(ix.data);
+            decoded.push({
+              outerIndex,
+              programId,
+              accounts,
+              data: decodedIx ? decodedIx.data.toString(): "unknown",
+            });
+            continue;
+          }
+          if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
+            const keys = getAccountMetasFromStrings(accountKeys, messageHeader);
+            const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+            decoded.push({
+              outerIndex,
+              programId,
+              accounts,
+              data: decodedIx ? decodedIx.toString(): "unknown",
+            });
+            continue;
+          }
+          if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
+            const keys = getAccountMetasFromStrings(accountKeys, messageHeader);
+            const decodedIx = decodeToken2022Instruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+            decoded.push({
+              outerIndex,
+              programId,
+              accounts,
+              data: decodedIx ? decodedIx.toString(): "unknown",
+            });
+            continue;
+          }
+        }
 
         if (!programId || !this.solanaDataParsers.has(programId)) {
           // console.log(`Parser not available for programId ${programId}`);
@@ -363,11 +441,15 @@ export class Parser {
     const allKeys = this.getAccountKeys(tx.transaction.message, tx.meta);
     const parsedCompiledInstruction = this.getParsedCompiledInstruction(
       tx.transaction.message.compiledInstructions,
-      allKeys
+      allKeys,
+      tx.transaction.message.header, 
+      tx.version === "legacy"?(tx.transaction.message as Message).accountKeys:tx.transaction.message.staticAccountKeys
     );
     const parsedInnerInstructions = this.parseInnerInstructions(
       tx.meta?.innerInstructions,
-      allKeys
+      allKeys,
+      tx.transaction.message.header, 
+      tx.version === "legacy"?(tx.transaction.message as Message).accountKeys:tx.transaction.message.staticAccountKeys
     );
     const parsedEvents = this.parseEvents(tx, allKeys);
 

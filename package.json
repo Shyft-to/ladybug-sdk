@@ -18,7 +18,12 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
+    "@coral-xyz/spl-token": "^0.32.1",
     "@project-serum/anchor": "^0.26.0",
+    "@solana/buffer-layout-utils": "^0.3.0",
+    "@solana/codecs-strings": "^5.0.0",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/spl-type-length-value": "^0.2.0",
     "@solana/web3.js": "^1.98.4",
     "@triton-one/yellowstone-grpc": "^4.0.2",
     "lodash": "^4.17.21"
