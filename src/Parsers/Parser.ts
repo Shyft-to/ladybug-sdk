@@ -47,7 +47,8 @@ import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { decodeTokenInstruction } from "./token-program-parser";
 import { SYSTEM_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/native/system";
 import { decodeSystemInstruction } from "./system-program-parser";
-import { decodeToken2022Instruction } from "./token-2022-parser";
+// import { decodeToken2022Instruction } from "./token-2022-parser";
+import { decodeToken2022Instruction2 as decodeToken2022Instruction } from "../decoders/token-2022";
 
 type AnyIdl = CoralIdl | SerumIdl;
 
@@ -246,7 +247,7 @@ export class Parser {
         }
         if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
           const keys = getInstructionAccountMetas(accounts, superMap);
-          const decodedIx = decodeToken2022Instruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+          const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: Buffer.from(ix.data)});
           decoded.push({
             programId,
             accounts,
@@ -261,7 +262,7 @@ export class Parser {
         decoded.push({
           programId,
           accounts,
-          data: ix.data,
+          data: plaintextFormatter(ix.data) || ix.data,
         });
         continue;
       }
@@ -330,7 +331,7 @@ export class Parser {
               outerIndex,
               programId,
               accounts,
-              data: decodedIx ? decodedIx.data.toString(): "unknown",
+              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
             });
             continue;
           }
@@ -341,18 +342,18 @@ export class Parser {
               outerIndex,
               programId,
               accounts,
-              data: decodedIx ? decodedIx.toString(): "unknown",
+              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
             });
             continue;
           }
           if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
             const keys = getAccountMetasFromStrings(accountKeys, messageHeader);
-            const decodedIx = decodeToken2022Instruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+            const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: Buffer.from(ix.data)});
             decoded.push({
               outerIndex,
               programId,
               accounts,
-              data: decodedIx ? decodedIx.toString(): "unknown",
+              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
             });
             continue;
           }
