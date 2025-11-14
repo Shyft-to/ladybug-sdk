@@ -36,7 +36,7 @@ import { IdlField as SerumIdlField } from "@project-serum/anchor/dist/cjs/idl";
 import { intersection } from "lodash";
 
 import { serializeStruct } from "../utils/account-formatter";
-import { getAccountMetasFromStrings, plaintextFormatter } from "../utils/common";
+import { buildAccountMetaMap, getAccountMetasFromStrings, getInstructionAccountMetas, plaintextFormatter } from "../utils/common";
 
 import {
   ReadableTransactionResponse,
@@ -220,7 +220,7 @@ export class Parser {
       accounts: string[];
       data: any;
     }[] = [];
-
+    const superMap = buildAccountMetaMap(accountKeys, messageHeader);
     for (const ix of compiledInstructions) {
       const programId = allKeys[ix.programIdIndex];
       const accounts = ix.accountKeyIndexes.map((a) => allKeys[a]);
@@ -235,7 +235,7 @@ export class Parser {
           continue;
         }
         if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
-          const keys = getAccountMetasFromStrings(accountKeys, messageHeader);
+          const keys = getInstructionAccountMetas(accounts, superMap);
           const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
           decoded.push({
             programId,
@@ -245,7 +245,7 @@ export class Parser {
           continue;
         }
         if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
-          const keys = getAccountMetasFromStrings(accountKeys, messageHeader);
+          const keys = getInstructionAccountMetas(accounts, superMap);
           const decodedIx = decodeToken2022Instruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
           decoded.push({
             programId,
