@@ -1,82 +1,251 @@
 import {
-	AuthorityType,
-	TOKEN_PROGRAM_ID,
-	TokenInstruction,
-	decodeApproveCheckedInstruction,
-	decodeApproveInstruction,
-	decodeBurnCheckedInstruction,
-	decodeBurnInstruction,
-	decodeCloseAccountInstruction,
-	decodeFreezeAccountInstruction,
-	decodeInitializeAccountInstruction,
-	decodeInitializeMintInstructionUnchecked,
-	decodeInitializeMultisigInstruction,
-	decodeMintToCheckedInstruction,
-	decodeMintToInstruction,
-	decodeRevokeInstruction,
-	decodeSetAuthorityInstruction,
-	decodeThawAccountInstruction,
-	decodeTransferCheckedInstruction,
-	decodeTransferInstruction,
-	decodeAmountToUiAmountInstruction,
-	decodeInitializeAccount2Instruction,
-	decodeInitializeAccount3Instruction,
-	decodeInitializeMint2Instruction,
-	decodeInitializeImmutableOwnerInstruction,
-	decodeSyncNativeInstruction,
-	decodeUiAmountToAmountInstruction,
+    AuthorityType,
+    TOKEN_PROGRAM_ID,
+    TokenInstruction,
+    decodeApproveCheckedInstruction,
+    decodeApproveInstruction,
+    decodeBurnCheckedInstruction,
+    decodeBurnInstruction,
+    decodeCloseAccountInstruction,
+    decodeFreezeAccountInstruction,
+    decodeInitializeAccountInstruction,
+    decodeInitializeMintInstructionUnchecked,
+    decodeInitializeMultisigInstruction,
+    decodeMintToCheckedInstruction,
+    decodeMintToInstruction,
+    decodeRevokeInstruction,
+    decodeSetAuthorityInstruction,
+    decodeThawAccountInstruction,
+    decodeTransferCheckedInstruction,
+    decodeTransferInstruction,
+    decodeAmountToUiAmountInstruction,
+    decodeInitializeAccount2Instruction,
+    decodeInitializeAccount3Instruction,
+    decodeInitializeMint2Instruction,
+    decodeInitializeImmutableOwnerInstruction,
+    decodeSyncNativeInstruction,
+    decodeUiAmountToAmountInstruction,
 } from "@solana/spl-token";
 
 
 export function decodeTokenInstruction(
     instruction: any
 ) {
-    const decoded = instruction.data[0];
-
-    switch (decoded) {
-        case TokenInstruction.InitializeAccount:
-            return decodeInitializeAccountInstruction(instruction);
-        case TokenInstruction.InitializeAccount2:
-            return decodeInitializeAccount2Instruction(instruction);
-        case TokenInstruction.InitializeAccount3:
-            return decodeInitializeAccount3Instruction(instruction);
-        case TokenInstruction.InitializeMint:
-            return decodeInitializeMintInstructionUnchecked(instruction);
-        case TokenInstruction.InitializeMint2:
-            return decodeInitializeMint2Instruction(instruction);
-        case TokenInstruction.InitializeMultisig:
-            return decodeInitializeMultisigInstruction(instruction);
-        case TokenInstruction.Transfer:
-            return decodeTransferInstruction(instruction);
-        case TokenInstruction.TransferChecked:
-            return decodeTransferCheckedInstruction(instruction);
-        case TokenInstruction.Approve:
-            return decodeApproveInstruction(instruction);
-        case TokenInstruction.ApproveChecked:
-            return decodeApproveCheckedInstruction(instruction);
-        case TokenInstruction.Revoke:
-            return decodeRevokeInstruction(instruction);
-        case TokenInstruction.SetAuthority:
-            return decodeSetAuthorityInstruction(instruction);
-        case TokenInstruction.MintTo:
-            return decodeMintToInstruction(instruction);
-        case TokenInstruction.MintToChecked:
-            return decodeMintToCheckedInstruction(instruction);
-        case TokenInstruction.Burn:
-            return decodeBurnInstruction(instruction);
-        case TokenInstruction.BurnChecked:
-            return decodeBurnCheckedInstruction(instruction);
-        case TokenInstruction.CloseAccount:
-            return decodeCloseAccountInstruction(instruction);
-        case TokenInstruction.FreezeAccount:
-            return decodeFreezeAccountInstruction(instruction);
-        case TokenInstruction.ThawAccount:
-            return decodeThawAccountInstruction(instruction);
-        case TokenInstruction.SyncNative:
-            return decodeSyncNativeInstruction(instruction);
-        case TokenInstruction.AmountToUiAmount:
-            return decodeAmountToUiAmountInstruction(instruction);
-        case TokenInstruction.UiAmountToAmount:
-            return decodeUiAmountToAmountInstruction(instruction);
+    try {
+        const discriminator = instruction.data[0];
+        let parsed;
+        switch (discriminator) {
+            case TokenInstruction.InitializeAccount: {
+                const decodedInsr = decodeInitializeAccountInstruction(instruction);
+                parsed = {
+                    name: "initializeAccount",
+                    data: decodedInsr
+                }
+                break;
+            }
+            case TokenInstruction.InitializeAccount2:
+                {
+                    const decodedInsr = decodeInitializeAccount2Instruction(instruction);
+                    parsed = {
+                        name: "initializeAccount2",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.InitializeAccount3:
+                {
+                    const decodedInsr = decodeInitializeAccount3Instruction(instruction);
+                    parsed = {
+                        name: "initializeAccount3",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.InitializeMint:
+                {
+                    const decodedInsr = decodeInitializeMintInstructionUnchecked(instruction);
+                    parsed = {
+                        name: "initializeMint",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.InitializeMint2:
+                {
+                    const decodedInsr = decodeInitializeMint2Instruction(instruction);
+                    parsed = {
+                        name: "initializeMint2",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.InitializeMultisig:
+                {
+                    const decodedInsr = decodeInitializeMultisigInstruction(instruction);
+                    parsed = {
+                        name: "initializeMultisig",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.Transfer:
+                {
+                    const decodedInsr = decodeTransferInstruction(instruction);
+                    parsed = {
+                        name: "transfer",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.TransferChecked:
+                {
+                    const decodedInsr = decodeTransferCheckedInstruction(instruction);
+                    parsed = {
+                        name: "transferChecked",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.Approve:
+                {
+                    const decodedInsr = decodeApproveInstruction(instruction);
+                    parsed = {
+                        name: "approve",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.ApproveChecked:
+                {
+                    const decodedInsr = decodeApproveCheckedInstruction(instruction);
+                    parsed = {
+                        name: "approveChecked",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.Revoke:
+                {
+                    const decodedInsr = decodeRevokeInstruction(instruction);
+                    parsed = {
+                        name: "revoke",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.SetAuthority:
+                {
+                    const decodedInsr = decodeSetAuthorityInstruction(instruction);
+                    parsed = {
+                        name: "setAuthority",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.MintTo:
+                {
+                    const decodedInsr = decodeMintToInstruction(instruction);
+                    parsed = {
+                        name: "mintTo",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.MintToChecked:
+                {
+                    const decodedInsr = decodeMintToCheckedInstruction(instruction);
+                    parsed = {
+                        name: "mintToChecked",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.Burn:
+                {
+                    const decodedInsr = decodeBurnInstruction(instruction);
+                    parsed = {
+                        name: "burn",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.BurnChecked:
+                {
+                    const decodedInsr = decodeBurnCheckedInstruction(instruction);
+                    parsed = {
+                        name: "burnChecked",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.CloseAccount:
+                {
+                    const decodedInsr = decodeCloseAccountInstruction(instruction);
+                    parsed = {
+                        name: "closeAccount",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.FreezeAccount:
+                {
+                    const decodedInsr = decodeFreezeAccountInstruction(instruction);
+                    parsed = {
+                        name: "freezeAccount",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.ThawAccount:
+                {
+                    const decodedInsr = decodeThawAccountInstruction(instruction);
+                    parsed = {
+                        name: "thawAccount",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.SyncNative:
+                {
+                    const decodedInsr = decodeSyncNativeInstruction(instruction);
+                    parsed = {
+                        name: "syncNative",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            case TokenInstruction.AmountToUiAmount:
+                {
+                    const decodedInsr = decodeAmountToUiAmountInstruction(instruction);
+                    parsed = {
+                        name: "amountToUiAmount",
+                        data: decodedInsr
+                    }
+                }
+            case TokenInstruction.UiAmountToAmount:
+                {
+                    const decodedInsr = decodeUiAmountToAmountInstruction(instruction);
+                    parsed = {
+                        name: "uiAmountToAmount",
+                        data: decodedInsr
+                    }
+                    break;
+                }
+            default: {
+                parsed = {
+                    name: "unknown",
+                    data: {}
+                }
+                break;
+            }
+        }
+        return parsed;
+    } catch (error) {
+        console.log("Error decoding token instruction: ", error);
+        return {
+            name: "unknown",
+            data: {}
+        }
     }
+
 }

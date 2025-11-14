@@ -230,7 +230,7 @@ export class Parser {
           decoded.push({
             programId,
             accounts,
-            data: decodedIx ? decodedIx.data.toString(): "unknown",
+            data: decodedIx ? plaintextFormatter(decodedIx.data) : "unknown",
           });
           continue;
         }
@@ -240,7 +240,7 @@ export class Parser {
           decoded.push({
             programId,
             accounts,
-            data: decodedIx ? decodedIx.toString(): "unknown",
+            data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
           });
           continue;
         }
@@ -250,7 +250,7 @@ export class Parser {
           decoded.push({
             programId,
             accounts,
-            data: decodedIx ? decodedIx.toString(): "unknown",
+            data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
           });
           continue;
         }
