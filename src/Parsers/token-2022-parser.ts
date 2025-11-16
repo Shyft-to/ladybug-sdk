@@ -57,73 +57,145 @@ import {
 } from "@solana/spl-token";
 import { BN } from "@coral-xyz/anchor";
 import { splDiscriminate } from "@solana/spl-type-length-value";
+import {
+	emitLayout,
+	getAccountDataSizeLayout,
+	metadataLayout,
+	removeKeyLayout,
+	updateAuthorityLayout,
+	updateMetadataLayout,
+} from "../decoders/layouts";
 
 export function decodeToken2022Instruction(instruction: TransactionInstruction) {
     const discriminator = instruction.data[0];
     let decoded;
     switch(discriminator) {
         case TokenInstruction.InitializeMint: {
-            decoded = decodeInitializeMintInstructionUnchecked(instruction);
+            const data = decodeInitializeMintInstructionUnchecked(instruction);
+            decoded = {
+                name: "initializeMint",
+                data
+            }
             break;
         }
         case TokenInstruction.InitializeAccount: {
-            decoded = decodeInitializeAccountInstruction(instruction);
+            const data = decodeInitializeAccountInstruction(instruction);
+            decoded = {
+                name: "initializeAccount",
+                data
+            }
             break;
         }
         case TokenInstruction.InitializeMultisig: {
-            decoded = decodeInitializeMultisigInstruction(instruction);
+            const data = decodeInitializeMultisigInstruction(instruction);
+            decoded = {
+                name: "initializeMultisig",
+                data
+            }
             break;
         }
         case TokenInstruction.Transfer: {
-            decoded = decodeTransferInstruction(instruction);
+            const data = decodeTransferInstruction(instruction);
+            decoded = {
+                name: "transfer",
+                data
+            }
             break;
         }
         case TokenInstruction.Approve: {
-            decoded = decodeApproveInstruction(instruction);
+            const data = decodeApproveInstruction(instruction);
+            decoded = {
+                name: "approve",
+                data
+            }
             break;
         }
         case TokenInstruction.Revoke: {
-            decoded = decodeRevokeInstruction(instruction);
+            const data = decodeRevokeInstruction(instruction);
+            decoded = {
+                name: "revoke",
+                data
+            }
             break;
         }
         case TokenInstruction.SetAuthority: {
-            decoded = decodeSetAuthorityInstruction(instruction);
+            const data = decodeSetAuthorityInstruction(instruction);
+            decoded = {
+                name: "setAuthority",
+                data
+            }
             break;
         }
         case TokenInstruction.MintTo: {
-            decoded = decodeMintToInstruction(instruction);
+            const data = decodeMintToInstruction(instruction);
+            decoded = {
+                name: "mintTo",
+                data
+            }
             break;
         }
         case TokenInstruction.Burn: {
-            decoded = decodeBurnInstruction(instruction);
+            const data = decodeBurnInstruction(instruction);
+            decoded = {
+                name: "burn",
+                data
+            }
             break;
         }
         case TokenInstruction.CloseAccount: {
-            decoded = decodeCloseAccountInstruction(instruction);
+            const data = decodeCloseAccountInstruction(instruction);
+            decoded = {
+                name: "closeAccount",
+                data
+            }
             break;
         }
         case TokenInstruction.FreezeAccount: {
-            decoded = decodeFreezeAccountInstruction(instruction);
+            const data = decodeFreezeAccountInstruction(instruction);
+            decoded = {
+                name: "freezeAccount",
+                data
+            }
             break;
         }
         case TokenInstruction.ThawAccount: {
-            decoded = decodeThawAccountInstruction(instruction);
+            const data = decodeThawAccountInstruction(instruction);
+            decoded = {
+                name: "thawAccount",
+                data
+            }
             break;
         }
         case TokenInstruction.TransferChecked: {
-            decoded = decodeTransferCheckedInstruction(instruction);
+            const data = decodeTransferCheckedInstruction(instruction);
+            decoded = {
+                name: "transferChecked",
+                data
+            }
             break;
         }
         case TokenInstruction.ApproveChecked: {
-            decoded = decodeApproveCheckedInstruction(instruction);
+            const data = decodeApproveCheckedInstruction(instruction);
+            decoded = {
+                name: "approveChecked",
+                data
+            }
             break;
         }
         case TokenInstruction.BurnChecked: {
-            decoded = decodeBurnCheckedInstruction(instruction);
+            const data = decodeBurnCheckedInstruction(instruction);
+            decoded = {
+                name: "burnChecked",
+                data
+            }
             break;
         }
         case TokenInstruction.InitializeAccount2: {
-            decoded = decodeInitializeAccount2Instruction(instruction);
+            const data = decodeInitializeAccount2Instruction(instruction);
+            decoded = {
+                name: "initializeAccount2",
+                data
+            }
             break;
         }
         case TokenInstruction.SyncNative: {
@@ -131,27 +203,59 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.InitializeAccount3: {
-            decoded = decodeInitializeAccount3Instruction(instruction);
+            const data = decodeInitializeAccount3Instruction(instruction);
+            decoded = {
+                name: "initializeAccount3",
+                data
+            }
             break;
         }
         case TokenInstruction.InitializeMint2: {
-            decoded = decodeInitializeMint2Instruction(instruction);
+            const data = decodeInitializeMint2Instruction(instruction);
+            decoded = {
+                name: "initializeMint2",
+                data
+            }
             break;
         }
         case TokenInstruction.GetAccountDataSize: {
-            decoded = {name: "getAccountDataSize"}
+            const data = {name: "getAccountDataSize"}
+            decoded = {
+                name: "getAccountDataSize",
+                data
+            }
             break;
         }
         case TokenInstruction.InitializeImmutableOwner: {
-            decoded = decodeInitializeImmutableOwnerInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            const data = decodeInitializeImmutableOwnerInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            decoded = {
+                name: "initializeImmutableOwner",
+                data
+            }
             break;
         }
         case TokenInstruction.AmountToUiAmount: {
-            decoded = decodeAmountToUiAmountInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            const data = decodeAmountToUiAmountInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            decoded = {
+                name: "amountToUiAmount",
+                data
+            }
+            break;
+        }
+        case TokenInstruction.UiAmountToAmount: {
+            const data = decodeUiAmountToAmountInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            decoded = {
+                name: "uiAmountToAmount",
+                data
+            }
             break;
         }
         case TokenInstruction.InitializeMintCloseAuthority: {
-            decoded = decodeInitializeMintCloseAuthorityInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            const data = decodeInitializeMintCloseAuthorityInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            decoded = {
+                name: "initializeMintCloseAuthority",
+                data
+            }
             break;
         }
         case TokenInstruction.CreateNativeMint: {
@@ -162,27 +266,51 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
 			const subDiscriminator = instruction.data[1];
             switch (subDiscriminator) {
                 case TransferFeeInstruction.InitializeTransferFeeConfig: {
-                    decoded = decodeInitializeTransferFeeConfigInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeInitializeTransferFeeConfigInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    decoded = {
+                        name: "initializeTransferFeeConfig",
+                        data
+                    }
                     break;
                 }
                 case TransferFeeInstruction.TransferCheckedWithFee: {
-                    decoded = decodeTransferCheckedWithFeeInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeTransferCheckedWithFeeInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    decoded = {
+                        name: "transferCheckedWithFee",
+                        data
+                    }
                     break;
                 }
                 case TransferFeeInstruction.WithdrawWithheldTokensFromMint: {
-                    decoded = decodeWithdrawWithheldTokensFromMintInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeWithdrawWithheldTokensFromMintInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    decoded = {
+                        name: "withdrawWithheldTokensFromMint",
+                        data
+                    }
                     break;
                 }
                 case TransferFeeInstruction.WithdrawWithheldTokensFromAccounts: {
-                    decoded = decodeWithdrawWithheldTokensFromAccountsInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeWithdrawWithheldTokensFromAccountsInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    decoded = {
+                        name: "withdrawWithheldTokensFromAccounts",
+                        data
+                    }
                     break;
                 }
                 case TransferFeeInstruction.HarvestWithheldTokensToMint: {
-                    decoded = decodeHarvestWithheldTokensToMintInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeHarvestWithheldTokensToMintInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    decoded = {
+                        name: "harvestWithheldTokensToMint",
+                        data
+                    }
                     break;
                 }
                 case TransferFeeInstruction.SetTransferFee: {
-                    decoded = decodeSetTransferFeeInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeSetTransferFeeInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    decoded = {
+                        name: "setTransferFee",
+                        data
+                    }
                     break;
                 }
                 default: {
@@ -190,20 +318,32 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
 					break;
 				} 
             }
+            break;
         }
         case TokenInstruction.DefaultAccountStateExtension: {
             const subDiscriminator = instruction.data[1];
             switch (subDiscriminator) {
                 case DefaultAccountStateInstruction.Initialize: {
-                    decoded = defaultAccountStateInstructionData.decode(instruction.data);
+                    const data = defaultAccountStateInstructionData.decode(instruction.data);
+                    decoded = {
+                        name: "TokenInitialize",
+                        data
+                    }
                     break;
                 }
                 case DefaultAccountStateInstruction.Update: {
-                    decoded = defaultAccountStateInstructionData.decode(instruction.data);
+                    const data = defaultAccountStateInstructionData.decode(instruction.data);
+                    decoded = {
+                        name: "TokenUpdate",
+                        data
+                    }
                     break;
                 }
                 default: {
-                    decoded = null;
+                    decoded = {
+                        name: "unknown",
+                        data: null
+                    };
                     break;
                 }
             }
@@ -211,20 +351,35 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
         }
         case TokenInstruction.MemoTransferExtension: {
             const instructionData = memoTransferInstructionData.decode(instruction.data);
-            decoded = instructionData;
+            const data = instructionData;
+            decoded = {
+                name: "memoTransfer",
+                data
+            }
             break;
         }
         case TokenInstruction.InitializeNonTransferableMint: {
-            decoded = {name: "initializeNonTransferableMint"}
+            const data = {name: "initializeNonTransferableMint"}
+            decoded = {
+                name: "initializeNonTransferableMint",
+                data
+            }
             break;
         }
         case TokenInstruction.CpiGuardExtension: {
             const instructionData = cpiGuardInstructionData.decode(instruction.data);
-            decoded = instructionData;
+            decoded = {
+                name: "cpiGuard",
+                data: instructionData
+            }
             break;
         }
         case TokenInstruction.InitializePermanentDelegate: {
-            decoded = decodeInitializePermanentDelegateInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            const data = decodeInitializePermanentDelegateInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            decoded = {
+                name: "initializePermanentDelegate",
+                data
+            }
             break;
         }
         case TokenInstruction.TransferHookExtension: {
@@ -232,15 +387,26 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             switch (subDiscriminator) {
                 case TransferHookInstruction.Initialize: {
                     
-                    decoded = initializeTransferHookInstructionData.decode(instruction.data);
+                    const data = initializeTransferHookInstructionData.decode(instruction.data);
+                    decoded = {
+                        name: "initializeTransferHook",
+                        data
+                    }
                     break;
                 }
                 case TransferHookInstruction.Update: {
-                    decoded = updateTransferHookInstructionData.decode(instruction.data);
+                    const data = updateTransferHookInstructionData.decode(instruction.data);
+                    decoded = {
+                        name: "updateTransferHook",
+                        data
+                    }
                     break;
                 }
                 default: {
-                    decoded = null;
+                    decoded = {
+                        name: "unknown",
+                        data: null
+                    };
                     break;
                 }
             }
@@ -251,16 +417,27 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             switch (subDiscriminator) {
                 case MetadataPointerInstruction.Initialize: {
                     
-                    decoded = initializeMetadataPointerData.decode(instruction.data);
+                    const data = initializeMetadataPointerData.decode(instruction.data);
+                    decoded = {
+                        name: "initializeMetadataPointer",
+                        data
+                    }
                     // decoded = instructionData;
                     break;
                 }
                 case MetadataPointerInstruction.Update: {
-                    decoded = updateMetadataPointerData.decode(instruction.data);
+                    const data = updateMetadataPointerData.decode(instruction.data);
+                    decoded = {
+                        name: "updateMetadataPointer",
+                        data
+                    }
                     break;
                 }
                 default: {
-                    decoded = null;
+                    decoded = {
+                        name: "unknown",
+                        data: null
+                    };
                     break;
                 }
             }
@@ -270,25 +447,91 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             const discriminator = instruction.data[1];
             switch (discriminator) {
                 case GroupMemberPointerInstruction.Initialize: {
-                    decoded = initializeGroupMemberPointerData.decode(instruction.data);
+                    const data = initializeGroupMemberPointerData.decode(instruction.data);
+                    decoded = {
+                        name: "initializeGroupMemberPointer",
+                        data
+                    }
                     break;
                 }
                 case GroupMemberPointerInstruction.Update: {
-                    decoded = updateGroupMemberPointerData.decode(instruction.data);
+                    const data = updateGroupMemberPointerData.decode(instruction.data);
+                    decoded = {
+                        name: "updateGroupMemberPointer",
+                        data
+                    }
                     break;
                 }
                 default: {
-                    decoded = null;
+                    const data = null;
+                    decoded = {
+                        name: "unknown",
+                        data
+                    }
                     break;
                 }
             }
             break;
         }
         default: {
-            decoded = null;
+            const discriminator = instruction.data.slice(0, 8).toString("hex");
+            const [splDiscriminateInit, splDiscriminateUpdating, splDiscriminateRemove, splDiscriminateUpdate, splDiscriminateEmitter] = [
+                "spl_token_metadata_interface:initialize_account",
+                "spl_token_metadata_interface:updating_field",
+                "spl_token_metadata_interface:remove_key_ix",
+                "spl_token_metadata_interface:update_the_authority",
+                "spl_token_metadata_interface:emitter",
+            ].map((s) => splDiscriminate(s));
+
+            switch (discriminator) {
+                case splDiscriminateInit.toString(): {
+                    const metadata = metadataLayout.decode(instruction.data);
+                    decoded = {
+                        name: "initializeMetadata",
+                        data: metadata
+                    }
+                    break;
+                }
+                case splDiscriminateUpdating.toString(): {
+                    const data = updateMetadataLayout.decode(instruction.data);
+                    decoded = {
+                        name: "updateField",
+                        data,
+                    };
+                    break;
+                }
+                case splDiscriminateRemove.toString(): {
+                    const data = removeKeyLayout.decode(instruction.data);
+                    decoded = {
+                        name: "removeKey",
+                        data
+                    }
+                    break;
+                }
+                case splDiscriminateUpdate.toString(): {
+                    const data = updateAuthorityLayout.decode(instruction.data);
+                    decoded = {
+                        name: "updateAuthority",
+                        data
+                    }
+                    break;
+                }
+                case splDiscriminateEmitter.toString(): {
+                    const data = emitLayout.decode(instruction.data);
+                    decoded = {
+                        name: "emit",
+                        data
+                    }
+                    break;
+                }
+                default:
+                    decoded = {
+                        name: "unknown",
+                        data: null
+                    };
+            }
             break;
         }
-    
     }
 
     return decoded;
