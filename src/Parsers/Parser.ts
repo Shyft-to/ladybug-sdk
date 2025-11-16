@@ -47,8 +47,8 @@ import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { decodeTokenInstruction } from "./token-program-parser";
 import { SYSTEM_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/native/system";
 import { decodeSystemInstruction } from "./system-program-parser";
-// import { decodeToken2022Instruction } from "./token-2022-parser";
-import { decodeToken2022Instruction2 as decodeToken2022Instruction } from "../decoders/token-2022";
+import { decodeToken2022Instruction } from "./token-2022-parser";
+// import { decodeToken2022Instruction2 as decodeToken2022Instruction } from "../decoders/token-2022";
 
 type AnyIdl = CoralIdl | SerumIdl;
 
