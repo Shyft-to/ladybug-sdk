@@ -3,7 +3,7 @@ import {
   SubscribeRequest,
 } from "@triton-one/yellowstone-grpc";
 import Client from "@triton-one/yellowstone-grpc";
-import { Parser } from "../Parsers/Parser";
+import { Parser } from "../parsers/parser";
 
 export class TransactionStreamer {
   private client: Client;

@@ -66,7 +66,7 @@ import {
 	updateAuthorityLayout,
 	updateMetadataLayout,
 } from "./layouts";
-import { SplToken22 as SplToken22Idl } from "../IdlFiles/spl-token-22-idl";
+import { SplToken22 as SplToken22Idl } from "../idl-files/spl-token-22-idl";
 import { ParsedIdlInstruction, ParsedInstruction } from "./interfaces";
 
 function decodeToken2022Instruction2(instruction: TransactionInstruction): ParsedInstruction<SplToken22Idl> {
