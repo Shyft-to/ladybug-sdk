@@ -17,11 +17,15 @@ import {
 } from "@solana/spl-token";
 import { AccountMeta, PublicKey, TransactionInstruction } from "@solana/web3.js";
 
+export const token2022Discriminator = struct<any>([u8("instruction")]);
+export function decodeToken2022Type(data: Buffer) {
+	return u8().decode(data);
+}
+
 export const getAccountDataSizeLayout = getStructCodec([
 	["instruction", getU8Codec()],
 	["extensions", getArrayCodec(getU8Codec(), { size: 1 })],
 ]);
-
 
 
 export const metadataLayout = getStructCodec([

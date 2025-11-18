@@ -96,7 +96,7 @@ export class TransactionFormatter {
             programIdIndex: programIdIndex,
             // @ts-ignore
             accountKeyIndexes: [...accounts] || [],
-            data: Uint8Array.from(Buffer.from(data || "", "base64")),
+            data: utils.bytes.bs58.encode(Buffer.from(data || "", "base64")),
           }),
         ),
         addressTableLookups:

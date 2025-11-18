@@ -26,17 +26,18 @@ import {
     decodeSyncNativeInstruction,
     decodeUiAmountToAmountInstruction,
 } from "@solana/spl-token";
+import { TransactionInstruction } from "@solana/web3.js";
 
 
 export function decodeTokenInstruction(
-    instruction: any
+    instruction: TransactionInstruction
 ) {
     try {
         const discriminator = instruction.data[0];
         let parsed;
         switch (discriminator) {
             case TokenInstruction.InitializeAccount: {
-                const decodedInsr = decodeInitializeAccountInstruction(instruction);
+                const decodedInsr = decodeInitializeAccountInstruction(instruction, instruction.programId);
                 parsed = {
                     name: "initializeAccount",
                     data: decodedInsr
@@ -45,7 +46,7 @@ export function decodeTokenInstruction(
             }
             case TokenInstruction.InitializeAccount2:
                 {
-                    const decodedInsr = decodeInitializeAccount2Instruction(instruction);
+                    const decodedInsr = decodeInitializeAccount2Instruction(instruction, instruction.programId);
                     parsed = {
                         name: "initializeAccount2",
                         data: decodedInsr
@@ -54,7 +55,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.InitializeAccount3:
                 {
-                    const decodedInsr = decodeInitializeAccount3Instruction(instruction);
+                    const decodedInsr = decodeInitializeAccount3Instruction(instruction, instruction.programId);
                     parsed = {
                         name: "initializeAccount3",
                         data: decodedInsr
@@ -72,7 +73,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.InitializeMint2:
                 {
-                    const decodedInsr = decodeInitializeMint2Instruction(instruction);
+                    const decodedInsr = decodeInitializeMint2Instruction(instruction, instruction.programId);
                     parsed = {
                         name: "initializeMint2",
                         data: decodedInsr
@@ -81,7 +82,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.InitializeMultisig:
                 {
-                    const decodedInsr = decodeInitializeMultisigInstruction(instruction);
+                    const decodedInsr = decodeInitializeMultisigInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "initializeMultisig",
                         data: decodedInsr
@@ -90,7 +91,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.Transfer:
                 {
-                    const decodedInsr = decodeTransferInstruction(instruction);
+                    const decodedInsr = decodeTransferInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "transfer",
                         data: decodedInsr
@@ -99,7 +100,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.TransferChecked:
                 {
-                    const decodedInsr = decodeTransferCheckedInstruction(instruction);
+                    const decodedInsr = decodeTransferCheckedInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "transferChecked",
                         data: decodedInsr
@@ -108,7 +109,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.Approve:
                 {
-                    const decodedInsr = decodeApproveInstruction(instruction);
+                    const decodedInsr = decodeApproveInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "approve",
                         data: decodedInsr
@@ -117,7 +118,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.ApproveChecked:
                 {
-                    const decodedInsr = decodeApproveCheckedInstruction(instruction);
+                    const decodedInsr = decodeApproveCheckedInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "approveChecked",
                         data: decodedInsr
@@ -126,7 +127,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.Revoke:
                 {
-                    const decodedInsr = decodeRevokeInstruction(instruction);
+                    const decodedInsr = decodeRevokeInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "revoke",
                         data: decodedInsr
@@ -135,7 +136,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.SetAuthority:
                 {
-                    const decodedInsr = decodeSetAuthorityInstruction(instruction);
+                    const decodedInsr = decodeSetAuthorityInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "setAuthority",
                         data: decodedInsr
@@ -144,7 +145,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.MintTo:
                 {
-                    const decodedInsr = decodeMintToInstruction(instruction);
+                    const decodedInsr = decodeMintToInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "mintTo",
                         data: decodedInsr
@@ -153,7 +154,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.MintToChecked:
                 {
-                    const decodedInsr = decodeMintToCheckedInstruction(instruction);
+                    const decodedInsr = decodeMintToCheckedInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "mintToChecked",
                         data: decodedInsr
@@ -162,7 +163,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.Burn:
                 {
-                    const decodedInsr = decodeBurnInstruction(instruction);
+                    const decodedInsr = decodeBurnInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "burn",
                         data: decodedInsr
@@ -171,7 +172,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.BurnChecked:
                 {
-                    const decodedInsr = decodeBurnCheckedInstruction(instruction);
+                    const decodedInsr = decodeBurnCheckedInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "burnChecked",
                         data: decodedInsr
@@ -180,7 +181,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.CloseAccount:
                 {
-                    const decodedInsr = decodeCloseAccountInstruction(instruction);
+                    const decodedInsr = decodeCloseAccountInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "closeAccount",
                         data: decodedInsr
@@ -189,7 +190,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.FreezeAccount:
                 {
-                    const decodedInsr = decodeFreezeAccountInstruction(instruction);
+                    const decodedInsr = decodeFreezeAccountInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "freezeAccount",
                         data: decodedInsr
@@ -198,7 +199,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.ThawAccount:
                 {
-                    const decodedInsr = decodeThawAccountInstruction(instruction);
+                    const decodedInsr = decodeThawAccountInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "thawAccount",
                         data: decodedInsr
@@ -207,7 +208,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.SyncNative:
                 {
-                    const decodedInsr = decodeSyncNativeInstruction(instruction);
+                    const decodedInsr = decodeSyncNativeInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "syncNative",
                         data: decodedInsr
@@ -216,7 +217,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.AmountToUiAmount:
                 {
-                    const decodedInsr = decodeAmountToUiAmountInstruction(instruction);
+                    const decodedInsr = decodeAmountToUiAmountInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "amountToUiAmount",
                         data: decodedInsr
@@ -224,7 +225,7 @@ export function decodeTokenInstruction(
                 }
             case TokenInstruction.UiAmountToAmount:
                 {
-                    const decodedInsr = decodeUiAmountToAmountInstruction(instruction);
+                    const decodedInsr = decodeUiAmountToAmountInstruction(instruction, instruction.programId);
                     parsed = {
                         name: "uiAmountToAmount",
                         data: decodedInsr

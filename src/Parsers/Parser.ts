@@ -8,6 +8,7 @@ import {
   VersionedMessage,
   ConfirmedTransactionMeta,
   MessageHeader,
+  LoadedAddresses,
 } from "@solana/web3.js";
 
 import {
@@ -48,6 +49,7 @@ import { decodeTokenInstruction } from "./token-program-parser";
 import { SYSTEM_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/native/system";
 import { decodeSystemInstruction } from "./system-program-parser";
 import { decodeToken2022Instruction } from "./token-2022-parser";
+import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 // import { decodeToken2022Instruction2 as decodeToken2022Instruction } from "../decoders/token-2022";
 
 type AnyIdl = CoralIdl | SerumIdl;
@@ -214,30 +216,37 @@ export class Parser {
     compiledInstructions: MessageCompiledInstruction[],
     allKeys: string[],
     messageHeader: MessageHeader, 
-    accountKeys: PublicKey[]
+    accountKeys: PublicKey[],
+    loadedAddresses: LoadedAddresses | undefined
   ) {
     const decoded: {
       programId: string;
       accounts: string[];
       data: any;
     }[] = [];
-    const superMap = buildAccountMetaMap(accountKeys, messageHeader);
+    
     for (const ix of compiledInstructions) {
       const programId = allKeys[ix.programIdIndex];
       const accounts = ix.accountKeyIndexes.map((a) => allKeys[a]);
        if(this.parseDefaultInstructions) {
+        const superMap = buildAccountMetaMap(accountKeys, messageHeader, loadedAddresses);
+        const keys = getInstructionAccountMetas(accounts, superMap);
         if(programId === TOKEN_PROGRAM_ID.toBase58()) {
-          const decodedIx = decodeTokenInstruction(ix.data);
+          const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: Buffer.from(ix.data)});
+          
           decoded.push({
             programId,
             accounts,
-            data: decodedIx ? plaintextFormatter(decodedIx.data) : "unknown",
+            data: decodedIx ? plaintextFormatter(decodedIx) : "unknown",
           });
           continue;
         }
         if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
           const keys = getInstructionAccountMetas(accounts, superMap);
           const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+          // const acc = "keys" in decodedIx && Array.isArray(decodedIx.keys) && decodedIx.keys
+          // ? decodedIx.keys.map((k) => k.pubkey.toBase58())
+          // : accounts;
           decoded.push({
             programId,
             accounts,
@@ -248,6 +257,7 @@ export class Parser {
         if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
           const keys = getInstructionAccountMetas(accounts, superMap);
           const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: Buffer.from(ix.data)});
+          
           decoded.push({
             programId,
             accounts,
@@ -262,7 +272,7 @@ export class Parser {
         decoded.push({
           programId,
           accounts,
-          data: plaintextFormatter(ix.data) || ix.data,
+          data: bs58.encode(ix.data) || ix.data,
         });
         continue;
       }
@@ -276,7 +286,7 @@ export class Parser {
         console.log(
           `Error decoding instruction by idl: ${ix.data} for program ${programId}`
         );
-        decodedInstruction = plaintextFormatter(ix.data) || ix.data;
+        decodedInstruction = bs58.encode(ix.data) || ix.data;
       }
 
       decoded.push({
@@ -299,7 +309,8 @@ export class Parser {
       | undefined,
     allKeys: readonly string[],
     messageHeader: MessageHeader, 
-    accountKeys: PublicKey[]
+    accountKeys: PublicKey[],
+    loadedAddresses: LoadedAddresses | undefined
   ): {
     outerIndex: number;
     programId: string;
@@ -325,8 +336,10 @@ export class Parser {
         const accounts = ix.accounts.map((i) => allKeys[i]);
 
         if(this.parseDefaultInstructions) {
+          const superMap = buildAccountMetaMap(accountKeys, messageHeader, loadedAddresses);
+          const keys = getInstructionAccountMetas(accounts, superMap);
           if(programId === TOKEN_PROGRAM_ID.toBase58()) {
-            const decodedIx = decodeTokenInstruction(ix.data);
+            const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: bs58.decode(ix.data)});
             decoded.push({
               outerIndex,
               programId,
@@ -336,8 +349,8 @@ export class Parser {
             continue;
           }
           if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
-            const keys = getAccountMetasFromStrings(accountKeys, messageHeader);
-            const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+            const keys = getInstructionAccountMetas(accounts, superMap);
+            const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: bs58.decode(ix.data)});
             decoded.push({
               outerIndex,
               programId,
@@ -347,8 +360,8 @@ export class Parser {
             continue;
           }
           if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
-            const keys = getAccountMetasFromStrings(accountKeys, messageHeader);
-            const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: Buffer.from(ix.data)});
+            const keys = getInstructionAccountMetas(accounts, superMap);
+            const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: bs58.decode(ix.data)});
             decoded.push({
               outerIndex,
               programId,
@@ -365,7 +378,7 @@ export class Parser {
             outerIndex,
             programId,
             accounts,
-            data: Buffer.from(ix.data).toString("base64"),
+            data: ix.data,
             stackHeight: ix.stackHeight,
           });
           continue;
@@ -376,7 +389,7 @@ export class Parser {
           outerIndex,
           programId,
           accounts,
-          data: plaintextFormatter(coder.instruction.decode(ix.data)),
+          data: plaintextFormatter(coder.instruction.decode(ix.data, "base58")),
           stackHeight: ix.stackHeight,
         });
       }
@@ -444,13 +457,15 @@ export class Parser {
       tx.transaction.message.compiledInstructions,
       allKeys,
       tx.transaction.message.header, 
-      tx.version === "legacy"?(tx.transaction.message as Message).accountKeys:tx.transaction.message.staticAccountKeys
+      tx.version === "legacy"?(tx.transaction.message as Message).accountKeys:tx.transaction.message.staticAccountKeys,
+      tx.meta?.loadedAddresses
     );
     const parsedInnerInstructions = this.parseInnerInstructions(
       tx.meta?.innerInstructions,
       allKeys,
       tx.transaction.message.header, 
-      tx.version === "legacy"?(tx.transaction.message as Message).accountKeys:tx.transaction.message.staticAccountKeys
+      tx.version === "legacy"?(tx.transaction.message as Message).accountKeys:tx.transaction.message.staticAccountKeys,
+      tx.meta?.loadedAddresses
     );
     const parsedEvents = this.parseEvents(tx, allKeys);
 

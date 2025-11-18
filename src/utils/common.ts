@@ -1,4 +1,4 @@
-import { PublicKey, MessageHeader, AccountMeta, CompiledInstruction } from "@solana/web3.js";
+import { PublicKey, MessageHeader, AccountMeta, CompiledInstruction, LoadedAddresses } from "@solana/web3.js";
 import { isObject } from "lodash";
 
 export function plaintextFormatter(obj: any) {
@@ -56,7 +56,8 @@ export function buildAccountMetaMap(
     numRequiredSignatures: number;
     numReadonlySignedAccounts: number;
     numReadonlyUnsignedAccounts: number;
-  }
+  },
+  loadedAddresses?: LoadedAddresses
 ): Map<PublicKey, AccountMeta> {
   const map = new Map<PublicKey, AccountMeta>();
 
@@ -86,6 +87,14 @@ export function buildAccountMetaMap(
     }
 
     map.set(pubkey, { pubkey, isSigner, isWritable });
+  }
+  if(loadedAddresses) {
+    loadedAddresses.readonly.forEach((pubkey: PublicKey) => {
+      map.set(pubkey, { pubkey, isSigner: false, isWritable: false });
+    })
+    loadedAddresses.writable.forEach((pubkey: PublicKey) => {
+      map.set(pubkey, { pubkey, isSigner: false, isWritable: true });
+    })
   }
 
   return map;
