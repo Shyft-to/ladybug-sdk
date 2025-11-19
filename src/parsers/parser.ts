@@ -89,7 +89,7 @@ export type ParserParams = {
 
 export class Parser {
   solanaDataParsers: Map<string, ParserParams> = new Map();
-  parseDefaultInstructions: boolean = true;
+  parseDefaultInstructions: boolean = false;
   // accountParsers: Map<string, ParserParams> = new Map();
   private instructionSet: Set<string> = new Set();
 
@@ -153,6 +153,16 @@ export class Parser {
       this.instructionSet.add(ix.name);
     });
     // this.accountParsers.set(programId.toString(), parserParams);
+  }
+
+/**
+ * Enables or disables the default System and Token instruction parsing. Disabled by default.
+ * When enabled, System program, Token program, and Token 2022 program instructions will be parsed.
+ * Instruction will be parsed based on the @solana/spl-token and @solana/web3 js library.
+ * @param enable - Whether to enable or disable default instruction parsing.
+ */
+  public useDefaultInstructionParsing(enable: boolean) {
+    this.parseDefaultInstructions = enable;
   }
 
   /**
