@@ -154,6 +154,7 @@ export class Parser {
       this.instructionSet.add(ix.name);
     });
     // this.accountParsers.set(programId.toString(), parserParams);
+    //test removed
   }
 
   /**
