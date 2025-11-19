@@ -88,8 +88,8 @@ export type ParserParams = {
 };
 
 export class Parser {
-  solanaDataParsers: Map<string, ParserParams> = new Map();
-  parseDefaultInstructions: boolean = false;
+  private solanaDataParsers: Map<string, ParserParams> = new Map();
+  private parseDefaultInstructions: boolean = false;
   // accountParsers: Map<string, ParserParams> = new Map();
   private instructionSet: Set<string> = new Set();
 
