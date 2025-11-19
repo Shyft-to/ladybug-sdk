@@ -50,7 +50,6 @@ import { SYSTEM_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/native/system";
 import { decodeSystemInstruction } from "./system-program-parser";
 import { decodeToken2022Instruction } from "./token-2022-parser";
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
-// import { decodeToken2022Instruction2 as decodeToken2022Instruction } from "../decoders/token-2022";
 
 type AnyIdl = CoralIdl | SerumIdl;
 

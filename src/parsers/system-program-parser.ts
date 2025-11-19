@@ -1,6 +1,4 @@
-// import { BN } from "@coral-xyz/anchor";
 import { TransactionInstruction, SystemInstruction, SystemProgram } from "@solana/web3.js";
-// import { SystemProgram as SystemProgramIdl } from "@coral-xyz/anchor";
 
 export function decodeSystemInstruction(instruction: TransactionInstruction) {
     

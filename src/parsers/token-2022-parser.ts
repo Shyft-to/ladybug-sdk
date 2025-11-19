@@ -63,8 +63,6 @@ import {
 	removeKeyLayout,
 	updateAuthorityLayout,
 	updateMetadataLayout,
-    token2022Discriminator,
-    decodeToken2022Type
 } from "../decoders/layouts";
 
 export function decodeToken2022Instruction(instruction: TransactionInstruction) {
