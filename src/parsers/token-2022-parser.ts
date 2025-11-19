@@ -55,7 +55,6 @@ import {
 	updateGroupMemberPointerData,
 	decodeSetTransferFeeInstruction,
 } from "@solana/spl-token";
-import { BN } from "@coral-xyz/anchor";
 import { splDiscriminate } from "@solana/spl-type-length-value";
 import {
 	emitLayout,
@@ -64,10 +63,13 @@ import {
 	removeKeyLayout,
 	updateAuthorityLayout,
 	updateMetadataLayout,
+    token2022Discriminator,
+    decodeToken2022Type
 } from "../decoders/layouts";
 
 export function decodeToken2022Instruction(instruction: TransactionInstruction) {
-    const discriminator = instruction.data[0];
+    let discriminator = instruction.data[0];
+    
     let decoded;
     switch(discriminator) {
         case TokenInstruction.InitializeMint: {
@@ -79,7 +81,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.InitializeAccount: {
-            const data = decodeInitializeAccountInstruction(instruction);
+            const data = decodeInitializeAccountInstruction(instruction, instruction.programId);
             decoded = {
                 name: "initializeAccount",
                 data
@@ -87,7 +89,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.InitializeMultisig: {
-            const data = decodeInitializeMultisigInstruction(instruction);
+            const data = decodeInitializeMultisigInstruction(instruction, instruction.programId);
             decoded = {
                 name: "initializeMultisig",
                 data
@@ -95,7 +97,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.Transfer: {
-            const data = decodeTransferInstruction(instruction);
+            const data = decodeTransferInstruction(instruction, instruction.programId);
             decoded = {
                 name: "transfer",
                 data
@@ -103,7 +105,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.Approve: {
-            const data = decodeApproveInstruction(instruction);
+            const data = decodeApproveInstruction(instruction, instruction.programId);
             decoded = {
                 name: "approve",
                 data
@@ -111,7 +113,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.Revoke: {
-            const data = decodeRevokeInstruction(instruction);
+            const data = decodeRevokeInstruction(instruction, instruction.programId);
             decoded = {
                 name: "revoke",
                 data
@@ -119,7 +121,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.SetAuthority: {
-            const data = decodeSetAuthorityInstruction(instruction);
+            const data = decodeSetAuthorityInstruction(instruction, instruction.programId);
             decoded = {
                 name: "setAuthority",
                 data
@@ -127,7 +129,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.MintTo: {
-            const data = decodeMintToInstruction(instruction);
+            const data = decodeMintToInstruction(instruction, instruction.programId);
             decoded = {
                 name: "mintTo",
                 data
@@ -135,7 +137,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.Burn: {
-            const data = decodeBurnInstruction(instruction);
+            const data = decodeBurnInstruction(instruction, instruction.programId);
             decoded = {
                 name: "burn",
                 data
@@ -143,7 +145,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.CloseAccount: {
-            const data = decodeCloseAccountInstruction(instruction);
+            const data = decodeCloseAccountInstruction(instruction, instruction.programId);
             decoded = {
                 name: "closeAccount",
                 data
@@ -151,7 +153,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.FreezeAccount: {
-            const data = decodeFreezeAccountInstruction(instruction);
+            const data = decodeFreezeAccountInstruction(instruction, instruction.programId);
             decoded = {
                 name: "freezeAccount",
                 data
@@ -159,7 +161,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.ThawAccount: {
-            const data = decodeThawAccountInstruction(instruction);
+            const data = decodeThawAccountInstruction(instruction, instruction.programId);
             decoded = {
                 name: "thawAccount",
                 data
@@ -167,7 +169,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.TransferChecked: {
-            const data = decodeTransferCheckedInstruction(instruction);
+            const data = decodeTransferCheckedInstruction(instruction, instruction.programId);
             decoded = {
                 name: "transferChecked",
                 data
@@ -175,7 +177,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.ApproveChecked: {
-            const data = decodeApproveCheckedInstruction(instruction);
+            const data = decodeApproveCheckedInstruction(instruction, instruction.programId);
             decoded = {
                 name: "approveChecked",
                 data
@@ -183,7 +185,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.BurnChecked: {
-            const data = decodeBurnCheckedInstruction(instruction);
+            const data = decodeBurnCheckedInstruction(instruction, instruction.programId);
             decoded = {
                 name: "burnChecked",
                 data
@@ -191,7 +193,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.InitializeAccount2: {
-            const data = decodeInitializeAccount2Instruction(instruction);
+            const data = decodeInitializeAccount2Instruction(instruction, instruction.programId);
             decoded = {
                 name: "initializeAccount2",
                 data
@@ -203,7 +205,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.InitializeAccount3: {
-            const data = decodeInitializeAccount3Instruction(instruction);
+            const data = decodeInitializeAccount3Instruction(instruction, instruction.programId);
             decoded = {
                 name: "initializeAccount3",
                 data
@@ -211,7 +213,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.InitializeMint2: {
-            const data = decodeInitializeMint2Instruction(instruction);
+            const data = decodeInitializeMint2Instruction(instruction, instruction.programId);
             decoded = {
                 name: "initializeMint2",
                 data
@@ -227,7 +229,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.InitializeImmutableOwner: {
-            const data = decodeInitializeImmutableOwnerInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            const data = decodeInitializeImmutableOwnerInstruction(instruction, instruction.programId);
             decoded = {
                 name: "initializeImmutableOwner",
                 data
@@ -235,7 +237,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.AmountToUiAmount: {
-            const data = decodeAmountToUiAmountInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            const data = decodeAmountToUiAmountInstruction(instruction, instruction.programId);
             decoded = {
                 name: "amountToUiAmount",
                 data
@@ -243,7 +245,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.UiAmountToAmount: {
-            const data = decodeUiAmountToAmountInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            const data = decodeUiAmountToAmountInstruction(instruction, instruction.programId);
             decoded = {
                 name: "uiAmountToAmount",
                 data
@@ -251,7 +253,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.InitializeMintCloseAuthority: {
-            const data = decodeInitializeMintCloseAuthorityInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            const data = decodeInitializeMintCloseAuthorityInstruction(instruction, instruction.programId);
             decoded = {
                 name: "initializeMintCloseAuthority",
                 data
@@ -266,7 +268,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
 			const subDiscriminator = instruction.data[1];
             switch (subDiscriminator) {
                 case TransferFeeInstruction.InitializeTransferFeeConfig: {
-                    const data = decodeInitializeTransferFeeConfigInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeInitializeTransferFeeConfigInstruction(instruction, instruction.programId);
                     decoded = {
                         name: "initializeTransferFeeConfig",
                         data
@@ -274,7 +276,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
                     break;
                 }
                 case TransferFeeInstruction.TransferCheckedWithFee: {
-                    const data = decodeTransferCheckedWithFeeInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeTransferCheckedWithFeeInstruction(instruction, instruction.programId);
                     decoded = {
                         name: "transferCheckedWithFee",
                         data
@@ -282,7 +284,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
                     break;
                 }
                 case TransferFeeInstruction.WithdrawWithheldTokensFromMint: {
-                    const data = decodeWithdrawWithheldTokensFromMintInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeWithdrawWithheldTokensFromMintInstruction(instruction, instruction.programId);
                     decoded = {
                         name: "withdrawWithheldTokensFromMint",
                         data
@@ -290,7 +292,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
                     break;
                 }
                 case TransferFeeInstruction.WithdrawWithheldTokensFromAccounts: {
-                    const data = decodeWithdrawWithheldTokensFromAccountsInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeWithdrawWithheldTokensFromAccountsInstruction(instruction, instruction.programId);
                     decoded = {
                         name: "withdrawWithheldTokensFromAccounts",
                         data
@@ -298,7 +300,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
                     break;
                 }
                 case TransferFeeInstruction.HarvestWithheldTokensToMint: {
-                    const data = decodeHarvestWithheldTokensToMintInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeHarvestWithheldTokensToMintInstruction(instruction, instruction.programId);
                     decoded = {
                         name: "harvestWithheldTokensToMint",
                         data
@@ -306,7 +308,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
                     break;
                 }
                 case TransferFeeInstruction.SetTransferFee: {
-                    const data = decodeSetTransferFeeInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+                    const data = decodeSetTransferFeeInstruction(instruction, instruction.programId);
                     decoded = {
                         name: "setTransferFee",
                         data
@@ -375,7 +377,7 @@ export function decodeToken2022Instruction(instruction: TransactionInstruction) 
             break;
         }
         case TokenInstruction.InitializePermanentDelegate: {
-            const data = decodeInitializePermanentDelegateInstruction(instruction, TOKEN_2022_PROGRAM_ID);
+            const data = decodeInitializePermanentDelegateInstruction(instruction, instruction.programId);
             decoded = {
                 name: "initializePermanentDelegate",
                 data
