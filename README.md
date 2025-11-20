@@ -6,7 +6,7 @@ A TypeScript SDK for streaming and parsing real-time Solana blockchain data usin
 
 - **Event Detection:** Built-in logic to easily detect common DeFi events like Buys, Sells, and Token Launches.
 
-- **Custom Parsing:** IDL-based program instruction parsing via the internal Parser class.
+- **Parsing based Usecases:** IDL-based program parsers can be created 
 
 - **TypeScript Native:** Written in TypeScript for better developer experience and type safety.
 
@@ -20,8 +20,8 @@ import { Parser } from "ladybug";
 import { Idl as coralXyzIdl } from "@coral-xyz/anchor";
 import { Idl as projectSerumIdl } from "@project-serum/anchor";
 
-const parser = new Parser();
-parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
+const parser = new Parser(); //initialization
+parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as coralXyzIdl); //adding a new parser for a specific program
 
 ```
 
@@ -30,6 +30,18 @@ Once this is initialized, we can decode both transactions and accounts using thi
 ```javascript
 parser.parseTransaction(tx); //parsing transactions
 parser.parseAccountData(rawAccount); //parsing account
+```
+
+### Enabling default parsers: Default System Program, Token Program & Token 2022 Program
+
+The SDK contains a default parser for System Program, Token Program, & Token 2022 Program, and parsing can be enabled using the `useDefaultInstructionParsing()` function. This is disabled by default (set to  `false`).
+
+```javascript
+const parser = new Parser();
+parser.addIDL(new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), clmmIdl as Idl);
+// after the initialization step
+
+parser.useDefaultInstructionParsing(true); // enables in-built parser for Token Program, Token 2022 and System Program
 ```
 
 ## Transaction Streamers
@@ -69,7 +81,7 @@ streamer.removeAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]) //acce
 ```
 
 
-## Examples: Custom Parsers
+## Examples: Use-cases related to a specific dex
 
 ### Initialization
 ```javascript
