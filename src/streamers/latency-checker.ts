@@ -11,18 +11,20 @@ type TxnData = {
     createdAt: number;
     blockTime: number;
     receivedTime: number;
+    parsingEndTime?: number;
 };
 type GroupedTxnData = {
     [slot: string]: TxnData[];
 };
 
 interface TransactionUpdate {
-    type: "transaction" | "slot";
+    type: "transactionStatus" | "slot" | "transaction";
     transactionSignature: string;
     createdAtReceived: number;
     blocktimeReceived: number;
     slot: number;
     gRPCBlocktime: number;
+    parsingEndTime?: number;
 }
 
 
@@ -35,10 +37,26 @@ export class LatencyChecker {
     private parser: Parser | undefined = undefined;
     private idlInstructionNames: Set<string> = new Set();
     private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
+    private enableParsingLatency: boolean = false;
+    private testingTime: number = 10 * 1000;
 
     private groupedTxnData: GroupedTxnData = {};
     private accumLatency = 0;
     private count = 0;
+
+    private minLatency: number = 3000;
+    private maxLatency: number = 0;
+    private avgLatency: number = 0;
+    private totalLatency: number = 0;
+    private totalTxns: number = 0;
+    private lessThan400: number = 0;
+    private lessThan800: number = 0;
+    private lessThan1000: number = 0;
+    private lessThan1200: number = 0;
+    private lessThan1500: number = 0;
+    private lessThan1800: number = 0;
+    private lessThan2000: number = 0;
+    private moreThan2000: number = 0;
 
     private onDataCallback?: (data: any) => void;
     private onErrorCallback?: (err: any) => void;
@@ -117,18 +135,40 @@ export class LatencyChecker {
     }
 
     private updateRequest() {
+        if(this.enableParsingLatency) {
+            this.request = {
+                ...this.request,
+                transactions: {
+                    transactions: {
+                        vote: false,
+                        failed: false,
+                        signature: undefined,
+                        accountInclude: Array.from(this.addresses),
+                        accountExclude: [],
+                        accountRequired: [],
+                    },
+                },
+                blocksMeta: {
+                    blocksMeta: {}
+                }
+            };
+            return
+        }
         this.request = {
             ...this.request,
             transactionsStatus: {
                 transactions: {
-                vote: false,
-                failed: false,
-                signature: undefined,
-                accountInclude: Array.from(this.addresses),
-                accountExclude: [],
-                accountRequired: [],
+                    vote: false,
+                    failed: false,
+                    signature: undefined,
+                    accountInclude: Array.from(this.addresses),
+                    accountExclude: [],
+                    accountRequired: [],
                 },
             },
+            blocksMeta: {
+                blocksMeta: {}
+            }
         };
     }
 
@@ -169,7 +209,17 @@ export class LatencyChecker {
      */
     async addParser(parser: Parser) {
         this.parser = parser;
+        this.enableParsingLatency = true;
         this.idlInstructionNames = parser.getAllInstructions();
+    }
+
+    /**
+     * Sets the time, in milliseconds, after which the stream will timeout and stop.
+     * This is used for testing purposes.
+     * @param testingTime The time, in milliseconds, after which the stream will timeout and stop.
+     */
+    async setTestingTime(testingTime: number) {
+        this.testingTime = testingTime;
     }
 
     /**
@@ -179,14 +229,34 @@ export class LatencyChecker {
      */
     async start() {
         this.running = true;
-        while (this.running) {
-            try {
-                await this.handleStream();
-            } catch (error) {
-                console.error("Stream error, retrying in 1s...", error);
-                if (!this.running) break;
-                await new Promise((res) => setTimeout(res, 1000));
+
+        const timeoutPromise = new Promise<void>((resolve) => {
+            setTimeout(() => {
+                console.log(`Stream timeout reached after ${this.testingTime}ms. Stopping stream...`);
+                this.stop();
+                resolve();
+            }, this.testingTime);
+        });
+
+        const streamProcessingPromise = (async () => {
+            while (this.running) {
+                try {
+                    await this.handleStream();
+                } catch (error) {
+                    if (!this.running) {
+                        break;
+                    }
+                    console.error("Stream error, retrying in 1s...", error);
+                    await new Promise((res) => setTimeout(res, 1000));
+                }
             }
+        })();
+
+
+        await Promise.race([timeoutPromise, streamProcessingPromise]);
+
+        if (this.totalTxns > 0) {
+            this.generateReport();
         }
     }
 
@@ -241,13 +311,46 @@ export class LatencyChecker {
                     return;
                 }
 
-                if(data.transaction) {
+                if (data?.transactionStatus) {
                     const receivedTime = Date.now();
+                    const transactionSignature = data?.transactionStatus?.signature
+                        ? utils.bytes.bs58.encode(data?.transactionStatus?.signature)
+                        : "";
+
+                    const receivedSlot = data?.transactionStatus?.slot;
+
+                    let createdAt = 0;
+                    if (data?.transactionStatus?.createdAt) {
+                        createdAt = new Date(data?.transactionStatus?.createdAt).getTime();
+                    }
+
+                    try {
+                        this.sortUpdateType({
+                            type: "transactionStatus",
+                            transactionSignature,
+                            createdAtReceived: createdAt,
+                            blocktimeReceived: receivedTime,
+                            slot: receivedSlot,
+                            gRPCBlocktime: 0,
+                        });
+                        return;
+                    } catch (error) {
+                        console.error("parsing error: ", error, transactionSignature);
+                    }
+                }
+
+                if (this.enableParsingLatency && data?.transaction) {
+                    const receivedTime = Date.now();
+                    const tx = this.parser
+                        ? this.parser.parseTransaction(
+                            this.parser.formatGrpcTransactionData(data.transaction, Date.now())
+                        )
+                        : data;
+                    const parsingCompleteTime = Date.now();
                     const transactionSignature = data?.transaction?.signature
                         ? utils.bytes.bs58.encode(data?.transaction?.signature)
                         : "";
                     const receivedSlot = data?.transaction?.slot;
-                    console.log("Received Slot 123: ", receivedSlot);
                     this.sortUpdateType({
                         type: "transaction",
                         transactionSignature,
@@ -255,43 +358,12 @@ export class LatencyChecker {
                         blocktimeReceived: receivedTime,
                         slot: receivedSlot,
                         gRPCBlocktime: 0,
+                        parsingEndTime: parsingCompleteTime,
                     });
                     return;
                 }
 
-                // if (data?.transactionStatus) {
-                //     const receivedTime = Date.now();
-                //     const transactionSignature = data?.transactionStatus?.signature
-                //         ? utils.bytes.bs58.encode(data?.transactionStatus?.signature)
-                //         : "";
-
-                //     const receivedSlot = data?.transactionStatus?.slot;
-
-                //     let createdAt = 0;
-                //     if (data?.transactionStatus?.createdAt) {
-                //         createdAt = new Date(data?.transactionStatus?.createdAt).getTime();
-                //     }
-
-                //     try {
-                //         this.sortUpdateType({
-                //             type: "transaction",
-                //             transactionSignature,
-                //             createdAtReceived: createdAt,
-                //             blocktimeReceived: receivedTime,
-                //             slot: receivedSlot,
-                //             gRPCBlocktime: 0,
-                //         });
-                //         return;
-                //     } catch (error) {
-                //         console.error("parsing error: ", error, transactionSignature);
-                //     }
-                // }
-
-                // const tx = this.parser
-                //   ? this.parser.parseTransaction(
-                //       this.parser.formatGrpcTransactionData(data.transaction, Date.now())
-                //     )
-                //   : data;
+                // 
 
                 // this.detectInstructionType(tx);
 
@@ -335,7 +407,7 @@ export class LatencyChecker {
         }
     }
 
-    addDatafromTransaction(
+    private addDatafromTransactionStatus(
         slot: string,
         signature: string,
         createdAt: number,
@@ -353,6 +425,26 @@ export class LatencyChecker {
         });
     }
 
+    private addDatafromTransaction(
+        slot: string,
+        signature: string,
+        createdAt: number,
+        blockTime: number,
+        receivedTime: number,
+        parsingEndTime?: number
+    ) {
+        if (!this.groupedTxnData[slot]) {
+            this.groupedTxnData[slot] = [];
+        }
+        this.groupedTxnData[slot].push({
+            signature,
+            createdAt,
+            blockTime,
+            receivedTime,
+            parsingEndTime,
+        });
+    }
+
     addDatafromBlockMeta(slot: string, blockTime: number) {
         if (!this.groupedTxnData[slot]) return;
 
@@ -367,17 +459,32 @@ export class LatencyChecker {
                 "ReceivedTime: ",
                 this.groupedTxnData[slot][i].receivedTime,
                 "created At: ",
-                this.groupedTxnData[slot][i].createdAt
+                this.groupedTxnData[slot][i].createdAt,
             );
             console.log(
                 "Observed Latency: ",
                 this.groupedTxnData[slot][i].receivedTime - blockTime
             );
-            console.log(
-                "Latency based on created at: ",
-                this.groupedTxnData[slot][i].receivedTime -
-                this.groupedTxnData[slot][i].createdAt
-            );
+            // console.log(
+            //     "Latency based on created at: ",
+            //     this.groupedTxnData[slot][i].receivedTime -
+            //     this.groupedTxnData[slot][i].createdAt
+            // );
+
+            if (this.enableParsingLatency && this.groupedTxnData[slot][i].parsingEndTime) {
+                const totalParsingTime =  (this.groupedTxnData[slot][i].parsingEndTime ?? 0) - this.groupedTxnData[slot][i].receivedTime;
+                if (Math.abs(totalParsingTime) === this.groupedTxnData[slot][i].receivedTime) {
+                    console.log(
+                        "Latency based on parsing end time: Unavailable",
+                    );
+                } else {
+                    console.log(
+                        "Latency based on parsing end time: ",
+                        totalParsingTime
+                    );
+                }
+
+            }
 
             this.accumLatency +=
                 this.groupedTxnData[slot][i].receivedTime - blockTime;
@@ -385,10 +492,10 @@ export class LatencyChecker {
 
             console.log("\nAverage Latency: ", this.accumLatency / this.count);
 
-            //   reportGen.collectData(
-            //     blockTime,
-            //     this.groupedTxnData[slot][i].receivedTime
-            //   );
+            this.collectData(
+                blockTime,
+                this.groupedTxnData[slot][i].receivedTime
+            );
         }
 
         // Remove slots older than 20
@@ -413,21 +520,136 @@ export class LatencyChecker {
             blocktimeReceived,
             slot,
             gRPCBlocktime,
+            parsingEndTime
         } = txn_item;
+
+
 
         if (type === "slot") {
             this.addDatafromBlockMeta(slot.toString(), gRPCBlocktime);
-        } else if (type === "transaction") {
-            this.addDatafromTransaction(
+        } else if (type === "transactionStatus") {
+            this.addDatafromTransactionStatus(
                 slot.toString(),
                 transactionSignature,
                 createdAtReceived,
                 0,
                 blocktimeReceived
             );
+        } else if (type === "transaction") {
+            this.addDatafromTransaction(
+                slot.toString(),
+                transactionSignature,
+                createdAtReceived,
+                0,
+                blocktimeReceived,
+                parsingEndTime
+            );
         } else {
             console.log("Unknown type: ", type);
             return;
         }
     };
+
+    private calculateLatency(transactionTime: number, timeReceived: number): number {
+        const observedDifference = timeReceived - transactionTime;
+        const latency = observedDifference > 0 ? observedDifference : 0;
+        return latency;
+    };
+
+    public collectData(transactionTime: number, timeReceived: number) {
+        const latency = this.calculateLatency(transactionTime, timeReceived);
+        if (latency < this.minLatency) {
+            this.minLatency = latency;
+        }
+        if (latency > this.maxLatency) {
+            this.maxLatency = latency;
+        }
+        this.totalLatency += latency;
+        this.totalTxns++;
+        this.avgLatency = this.totalLatency / this.totalTxns;
+        if (latency < 400) {
+            this.lessThan400++;
+        }
+        if (latency >= 400 && latency < 800) {
+            this.lessThan800++;
+        }
+        if (latency >= 800 && latency < 1000) {
+            this.lessThan1000++;
+        }
+        if (latency >= 1000 && latency < 1200) {
+            this.lessThan1200++;
+        }
+        if (latency >= 1200 && latency < 1500) {
+            this.lessThan1500++;
+        }
+        if (latency >= 1500 && latency < 1800) {
+            this.lessThan1800++;
+        }
+        if (latency >= 1800 && latency < 2000) {
+            this.lessThan2000++;
+        }
+        if (latency >= 2000) {
+            this.moreThan2000++;
+        }
+    }
+
+    // Inside the LatencyChecker class:
+
+    public generateReport() {        
+        console.log("**********************************************\n");
+        console.log(`* Min Latency: ${this.minLatency}`);
+        console.log(`* Max Latency: ${this.maxLatency}`);
+        console.log(`* Average Latency: ${this.avgLatency.toFixed(2)}`);
+        console.log(`* Total Txns: ${this.totalTxns}`);
+        console.log("\n**********************************************");
+
+        const latencyDistribution = [
+            { 
+                Range: '0-399ms', 
+                Count: this.lessThan400, 
+                Percentage: ((this.lessThan400 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            },
+            { 
+                Range: '400-799ms', 
+                Count: this.lessThan800, 
+                Percentage: ((this.lessThan800 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            },
+            { 
+                Range: '800-999ms', 
+                Count: this.lessThan1000, 
+                Percentage: ((this.lessThan1000 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            },
+            { 
+                Range: '1000-1199ms', 
+                Count: this.lessThan1200, 
+                Percentage: ((this.lessThan1200 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            },
+            { 
+                Range: '1200-1499ms', 
+                Count: this.lessThan1500, 
+                Percentage: ((this.lessThan1500 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            },
+            { 
+                Range: '1500-1799ms', 
+                Count: this.lessThan1800, 
+                Percentage: ((this.lessThan1800 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            },
+            { 
+                Range: '1800-2000ms', 
+                Count: this.lessThan2000, 
+                Percentage: ((this.lessThan2000 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            },
+            { 
+                Range: '2000ms+', 
+                Count: this.moreThan2000, 
+                Percentage: ((this.moreThan2000 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            }
+        ];
+
+        console.log('\nLatency Distribution:');
+        console.table(latencyDistribution);
+
+    }
+
+
 }
