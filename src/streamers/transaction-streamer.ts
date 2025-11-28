@@ -3,7 +3,7 @@ import {
   SubscribeRequest,
 } from "@triton-one/yellowstone-grpc";
 import Client from "@triton-one/yellowstone-grpc";
-import { Parser } from "../Parsers/Parser";
+import { Parser } from "../parsers/parser";
 
 export class TransactionStreamer {
   private client: Client;
@@ -12,6 +12,8 @@ export class TransactionStreamer {
   private running: boolean = false;
   private stream?: any;
   private parser: Parser | undefined = undefined;
+   private idlInstructionNames: Set<string> = new Set();
+  private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
   
   private onDataCallback?: (data: any) => void;
   private onErrorCallback?: (err: any) => void;
@@ -38,6 +40,19 @@ export class TransactionStreamer {
       ping: undefined,
       commitment: CommitmentLevel.PROCESSED,
     };
+  }
+
+   /**
+   * Registers a callback to be triggered when a specific instruction is detected in a transaction.
+   * @param instructionName The instruction name (must exist in IDL)
+   * @param callback The function to invoke when that instruction appears in a transaction
+   */
+  onDetectInstruction(instructionName: string, callback: (tx: any) => void) {
+    if (!this.idlInstructionNames.has(instructionName)) {
+      console.warn(`Instruction ${instructionName} not found in IDL`);
+      return;
+    }
+    this.onInstructionCallbacks[instructionName] = callback;
   }
 
  
@@ -129,6 +144,7 @@ export class TransactionStreamer {
    */
   async addParser(parser: Parser) {
     this.parser = parser;
+    this.idlInstructionNames = parser.getAllInstructions();
   }
 
   /**
@@ -182,26 +198,18 @@ export class TransactionStreamer {
     });
 
      this.stream.on("data", (data: any) => {
-      if (this.onDataCallback) {
-        try {
-          
-          if (data.transaction) {
-            if(this.parser === undefined) {
-              this.onDataCallback(data);
-              return;
-            }
-            const formatted = this.parser.formatGrpcTransactionData(
-              data.transaction,
-              Date.now()
-            );
-            const parsed = this.parser.parseTransaction(formatted);
-            this.onDataCallback(parsed);
-          } else {
-            this.onDataCallback(data);
-          }
-        } catch (err) {
-          if (this.onErrorCallback) this.onErrorCallback(err);
-        }
+      try {
+        const tx = this.parser
+          ? this.parser.parseTransaction(
+              this.parser.formatGrpcTransactionData(data.transaction, Date.now())
+            )
+          : data;
+
+        this.detectInstructionType(tx);
+
+        if (this.onDataCallback) this.onDataCallback(tx);
+      } catch (err) {
+        if (this.onErrorCallback) this.onErrorCallback(err);
       }
     });
 
@@ -209,5 +217,33 @@ export class TransactionStreamer {
     await streamClosed;
 
     this.stream = undefined;
+  }
+  
+  /**
+   * Detects which IDL instruction(s) are present in the transaction and calls the corresponding callbacks.
+   * @param tx The transaction data.
+   */
+  private detectInstructionType(tx: any) {
+    try {
+      const message = tx?.transaction?.message;
+      if (!message) return;
+
+      let instructions = message.instructions || message.compiledInstructions || [];
+      const innerInstructions = Array.isArray(tx.meta?.innerInstructions)
+        ? tx.meta.innerInstructions.flatMap((ix: any) => ix.instructions || [])
+        : [];
+
+      const allInstructions = [...instructions, ...innerInstructions];
+
+      for (const ix of allInstructions) {
+        const name = ix?.data?.name;
+        if (name && this.onInstructionCallbacks[name]) {
+          this.onInstructionCallbacks[name](tx);
+          break; // optional: stop after first match
+        }
+      }
+    } catch (err) {
+      if (this.onErrorCallback) this.onErrorCallback(err);
+    }
   }
 }
