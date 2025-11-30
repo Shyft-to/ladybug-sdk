@@ -35,8 +35,6 @@ export class LatencyChecker {
     private running: boolean = false;
     private stream?: any;
     private parser: Parser | undefined = undefined;
-    private idlInstructionNames: Set<string> = new Set();
-    private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
     private enableParsingLatency: boolean = false;
     private testingTime: number = 10 * 1000;
 
@@ -85,19 +83,6 @@ export class LatencyChecker {
         };
     }
 
-    /**
-    * Registers a callback to be triggered when a specific instruction is detected in a transaction.
-    * @param instructionName The instruction name (must exist in IDL)
-    * @param callback The function to invoke when that instruction appears in a transaction
-    */
-    onDetectInstruction(instructionName: string, callback: (tx: any) => void) {
-        if (!this.idlInstructionNames.has(instructionName)) {
-            console.warn(`Instruction ${instructionName} not found in IDL`);
-            return;
-        }
-        this.onInstructionCallbacks[instructionName] = callback;
-    }
-
 
     /**
      * Sets a callback function to be called when a transaction is received.
@@ -135,7 +120,7 @@ export class LatencyChecker {
     }
 
     private updateRequest() {
-        if(this.enableParsingLatency) {
+        if (this.enableParsingLatency) {
             this.request = {
                 ...this.request,
                 transactions: {
@@ -210,12 +195,11 @@ export class LatencyChecker {
     async addParser(parser: Parser) {
         this.parser = parser;
         this.enableParsingLatency = true;
-        this.idlInstructionNames = parser.getAllInstructions();
     }
 
     /**
-     * Sets the time, in milliseconds, after which the stream will timeout and stop.
-     * This is used for testing purposes.
+     * Sets the time, in milliseconds, for which the latency will be checked.
+     * The streamer will stop once this time has elapsed.
      * @param testingTime The time, in milliseconds, after which the stream will timeout and stop.
      */
     async setTestingTime(testingTime: number) {
@@ -347,9 +331,8 @@ export class LatencyChecker {
                         )
                         : data;
                     const parsingCompleteTime = Date.now();
-                    const transactionSignature = data?.transaction?.signature
-                        ? utils.bytes.bs58.encode(data?.transaction?.signature)
-                        : "";
+                    const transactionSignature = tx?.transaction?.signature
+                        ?? utils.bytes.bs58.encode(data?.transaction?.signature);
                     const receivedSlot = data?.transaction?.slot;
                     this.sortUpdateType({
                         type: "transaction",
@@ -363,10 +346,6 @@ export class LatencyChecker {
                     return;
                 }
 
-                // 
-
-                // this.detectInstructionType(tx);
-
                 // if (this.onDataCallback) this.onDataCallback(tx);
             } catch (err) {
                 if (this.onErrorCallback) this.onErrorCallback(err);
@@ -377,34 +356,6 @@ export class LatencyChecker {
         await streamClosed;
 
         this.stream = undefined;
-    }
-
-    /**
-     * Detects which IDL instruction(s) are present in the transaction and calls the corresponding callbacks.
-     * @param tx The transaction data.
-     */
-    private detectInstructionType(tx: any) {
-        try {
-            const message = tx?.transaction?.message;
-            if (!message) return;
-
-            let instructions = message.instructions || message.compiledInstructions || [];
-            const innerInstructions = Array.isArray(tx.meta?.innerInstructions)
-                ? tx.meta.innerInstructions.flatMap((ix: any) => ix.instructions || [])
-                : [];
-
-            const allInstructions = [...instructions, ...innerInstructions];
-
-            for (const ix of allInstructions) {
-                const name = ix?.data?.name;
-                if (name && this.onInstructionCallbacks[name]) {
-                    this.onInstructionCallbacks[name](tx);
-                    break; // optional: stop after first match
-                }
-            }
-        } catch (err) {
-            if (this.onErrorCallback) this.onErrorCallback(err);
-        }
     }
 
     private addDatafromTransactionStatus(
@@ -445,7 +396,7 @@ export class LatencyChecker {
         });
     }
 
-    addDatafromBlockMeta(slot: string, blockTime: number) {
+    private addDatafromBlockMeta(slot: string, blockTime: number) {
         if (!this.groupedTxnData[slot]) return;
 
         for (let i = 0; i < this.groupedTxnData[slot].length; i++) {
@@ -465,14 +416,9 @@ export class LatencyChecker {
                 "Observed Latency: ",
                 this.groupedTxnData[slot][i].receivedTime - blockTime
             );
-            // console.log(
-            //     "Latency based on created at: ",
-            //     this.groupedTxnData[slot][i].receivedTime -
-            //     this.groupedTxnData[slot][i].createdAt
-            // );
 
             if (this.enableParsingLatency && this.groupedTxnData[slot][i].parsingEndTime) {
-                const totalParsingTime =  (this.groupedTxnData[slot][i].parsingEndTime ?? 0) - this.groupedTxnData[slot][i].receivedTime;
+                const totalParsingTime = (this.groupedTxnData[slot][i].parsingEndTime ?? 0) - this.groupedTxnData[slot][i].receivedTime;
                 if (Math.abs(totalParsingTime) === this.groupedTxnData[slot][i].receivedTime) {
                     console.log(
                         "Latency based on parsing end time: Unavailable",
@@ -556,7 +502,7 @@ export class LatencyChecker {
         return latency;
     };
 
-    public collectData(transactionTime: number, timeReceived: number) {
+    private collectData(transactionTime: number, timeReceived: number) {
         const latency = this.calculateLatency(transactionTime, timeReceived);
         if (latency < this.minLatency) {
             this.minLatency = latency;
@@ -593,10 +539,8 @@ export class LatencyChecker {
         }
     }
 
-    // Inside the LatencyChecker class:
-
-    public generateReport() {        
-        console.log("**********************************************\n");
+    private generateReport() {
+        console.log("\n\n**********************************************\n");
         console.log(`* Min Latency: ${this.minLatency}`);
         console.log(`* Max Latency: ${this.maxLatency}`);
         console.log(`* Average Latency: ${this.avgLatency.toFixed(2)}`);
@@ -604,45 +548,45 @@ export class LatencyChecker {
         console.log("\n**********************************************");
 
         const latencyDistribution = [
-            { 
-                Range: '0-399ms', 
-                Count: this.lessThan400, 
-                Percentage: ((this.lessThan400 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            {
+                Range: '0-399ms',
+                Count: this.lessThan400,
+                Percentage: ((this.lessThan400 / this.totalTxns) * 100).toFixed(2) + ' %'
             },
-            { 
-                Range: '400-799ms', 
-                Count: this.lessThan800, 
-                Percentage: ((this.lessThan800 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            {
+                Range: '400-799ms',
+                Count: this.lessThan800,
+                Percentage: ((this.lessThan800 / this.totalTxns) * 100).toFixed(2) + ' %'
             },
-            { 
-                Range: '800-999ms', 
-                Count: this.lessThan1000, 
-                Percentage: ((this.lessThan1000 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            {
+                Range: '800-999ms',
+                Count: this.lessThan1000,
+                Percentage: ((this.lessThan1000 / this.totalTxns) * 100).toFixed(2) + ' %'
             },
-            { 
-                Range: '1000-1199ms', 
-                Count: this.lessThan1200, 
-                Percentage: ((this.lessThan1200 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            {
+                Range: '1000-1199ms',
+                Count: this.lessThan1200,
+                Percentage: ((this.lessThan1200 / this.totalTxns) * 100).toFixed(2) + ' %'
             },
-            { 
-                Range: '1200-1499ms', 
-                Count: this.lessThan1500, 
-                Percentage: ((this.lessThan1500 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            {
+                Range: '1200-1499ms',
+                Count: this.lessThan1500,
+                Percentage: ((this.lessThan1500 / this.totalTxns) * 100).toFixed(2) + ' %'
             },
-            { 
-                Range: '1500-1799ms', 
-                Count: this.lessThan1800, 
-                Percentage: ((this.lessThan1800 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            {
+                Range: '1500-1799ms',
+                Count: this.lessThan1800,
+                Percentage: ((this.lessThan1800 / this.totalTxns) * 100).toFixed(2) + ' %'
             },
-            { 
-                Range: '1800-2000ms', 
-                Count: this.lessThan2000, 
-                Percentage: ((this.lessThan2000 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            {
+                Range: '1800-2000ms',
+                Count: this.lessThan2000,
+                Percentage: ((this.lessThan2000 / this.totalTxns) * 100).toFixed(2) + ' %'
             },
-            { 
-                Range: '2000ms+', 
-                Count: this.moreThan2000, 
-                Percentage: ((this.moreThan2000 / this.totalTxns) * 100).toFixed(2) + ' %' 
+            {
+                Range: '2000ms+',
+                Count: this.moreThan2000,
+                Percentage: ((this.moreThan2000 / this.totalTxns) * 100).toFixed(2) + ' %'
             }
         ];
 
@@ -650,6 +594,4 @@ export class LatencyChecker {
         console.table(latencyDistribution);
 
     }
-
-
 }
