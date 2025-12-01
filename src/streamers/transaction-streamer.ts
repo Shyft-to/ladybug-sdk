@@ -5,6 +5,13 @@ import {
 import Client from "@triton-one/yellowstone-grpc";
 import { Parser } from "../parsers/parser";
 
+export type gRPCConfig = {
+  keepalive_time_ms?: number;
+  keepalive_timeout_ms?: number;
+  max_send_message_length?: number;
+  max_receive_message_length?: number;
+};
+
 export class TransactionStreamer {
   private client: Client;
   private request: SubscribeRequest;
@@ -12,8 +19,13 @@ export class TransactionStreamer {
   private running: boolean = false;
   private stream?: any;
   private parser: Parser | undefined = undefined;
-   private idlInstructionNames: Set<string> = new Set();
+  private idlInstructionNames: Set<string> = new Set();
   private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
+  private autoReconnect: boolean = true;
+
+  private fromSlot?: number;
+  private lastReceivedSlot?: number;
+  private useLastSlotOnReconnect: boolean = false;
   
   private onDataCallback?: (data: any) => void;
   private onErrorCallback?: (err: any) => void;
@@ -24,9 +36,25 @@ export class TransactionStreamer {
    * Initializes the TransactionStreamer, which can be used to stream transactions and parse them using the provided parser
    * @param endpoint Accepts your Yellowstone gRPC Connection URL
    * @param xToken Accepts your X-token, which is used for authentication
+   * @param grpcConfig Accepts additional 
    */
-  constructor(endpoint: string, xToken?: string) {
-    this.client = new Client(endpoint, xToken, undefined);
+  constructor(endpoint: string, xToken?: string, grpcConfig?: gRPCConfig) {
+    let grpcConfigtoSet = {};
+    if(grpcConfig){
+      if(grpcConfig.keepalive_time_ms){
+        grpcConfigtoSet = {...grpcConfigtoSet, 'grpc.keepalive_time_ms': grpcConfig.keepalive_time_ms};
+      }
+      if(grpcConfig.keepalive_timeout_ms){
+        grpcConfigtoSet = {...grpcConfigtoSet, 'grpc.keepalive_timeout_ms': grpcConfig.keepalive_timeout_ms};
+      }
+      if(grpcConfig.max_send_message_length){
+        grpcConfigtoSet = {...grpcConfigtoSet, 'grpc.max_send_message_length': grpcConfig.max_send_message_length};
+      }
+      if(grpcConfig.max_receive_message_length){
+        grpcConfigtoSet = {...grpcConfigtoSet, 'grpc.max_receive_message_length': grpcConfig.max_receive_message_length};
+      }
+    }
+    this.client = new Client(endpoint, xToken, grpcConfig? grpcConfigtoSet : undefined);
 
     this.request = {
       accounts: {},
@@ -91,9 +119,34 @@ export class TransactionStreamer {
     this.onCloseCallback = callback;
   }
 
+  /**
+   * Enables or disables auto reconnect for the transaction streamer.
+   * When enabled, the streamer will automatically reconnect to the stream if an error occurs.
+   * @param enabled Whether to enable or disable auto reconnect.
+   */
+  enableAutoReconnect(enabled: boolean) {
+    this.autoReconnect = enabled;
+  }
+
+  setFromSlot(slot: number) {
+    this.fromSlot = slot;
+  }
+  
+  resumeFromLastSlot(enabled: boolean) {
+    this.useLastSlotOnReconnect = enabled;
+  }
+
   private updateRequest() {
+    const slotToUse =
+      this.fromSlot !== undefined
+        ? this.fromSlot                     // user-forced slot
+        : this.useLastSlotOnReconnect
+          ? this.lastReceivedSlot           // automatic resume
+          : undefined;                      // default: latest slot
+
     this.request = {
       ...this.request,
+      fromSlot: slotToUse ? slotToUse.toString() : undefined,
       transactions: {
         tracked: {
           vote: false,
@@ -158,6 +211,10 @@ export class TransactionStreamer {
       try {
         await this.handleStream();
       } catch (error) {
+        if (!this.autoReconnect) {
+          console.error("Stream error. Auto-reconnect disabled. Stopping...", error);
+          break;
+        }
         console.error("Stream error, retrying in 1s...", error);
         if (!this.running) break;
         await new Promise((res) => setTimeout(res, 1000));
@@ -199,6 +256,10 @@ export class TransactionStreamer {
 
      this.stream.on("data", (data: any) => {
       try {
+        if (data?.transaction?.slot !== undefined) {
+          this.lastReceivedSlot = data.transaction.slot;
+        }
+
         const tx = this.parser
           ? this.parser.parseTransaction(
               this.parser.formatGrpcTransactionData(data.transaction, Date.now())
