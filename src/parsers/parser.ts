@@ -411,44 +411,47 @@ export class Parser {
     try {
       let programIds: string[] = [];
 
-      txn.transaction.message.compiledInstructions.forEach((instruction) => {
-        const programId = allKeys[instruction.programIdIndex];
-        if (programId) {
-          programIds.push(programId);
-        }
+      txn.transaction.message.compiledInstructions.forEach((ix) => {
+        const programId = allKeys[ix.programIdIndex];
+        if (programId) programIds.push(programId);
       });
-      const availableProgramParsers = Array.from(this.solanaDataParsers.keys());
-      const commonProgramIds = intersection(
-        availableProgramParsers,
-        programIds
-      );
-      if (!commonProgramIds.length) {
-        return [];
+
+      const inner = txn.meta?.innerInstructions;
+      if (inner && Array.isArray(inner)) {
+        inner.forEach((group) => {
+          group.instructions.forEach((ix) => {
+            const programId = allKeys[ix.programIdIndex];
+            if (programId) programIds.push(programId);
+          });
+        });
       }
+
+      programIds = Array.from(new Set(programIds));
+
+      const available = Array.from(this.solanaDataParsers.keys());
+      const commonProgramIds = intersection(available, programIds);
+
+      if (!commonProgramIds.length) return [];
+
       const events: any[] = [];
+
       for (const programId of commonProgramIds) {
         const parser = this.solanaDataParsers.get(programId);
-        if (!parser) {
-          // console.log("Parser not available for programId: ", programId);
-          continue;
-        }
+        if (!parser || !parser.eventParser) continue;
 
-        const eventParser = parser.eventParser;
-        if (!eventParser) {
-          // console.log("Event Parser not available for programId: ", programId);
-          continue;
-        }
-
-        const eventsArray = Array.from(
-          eventParser.parseLogs(txn?.meta?.logMessages || [])
+        const parsed = Array.from(
+          parser.eventParser.parseLogs(txn.meta?.logMessages || [])
         );
-        events.push(...eventsArray);
+
+        events.push(...parsed);
       }
+
       return events;
     } catch (error) {
       return [];
     }
   }
+
 
   /**
    * Parse a transaction and return a new transaction with parsed instructions and events.
