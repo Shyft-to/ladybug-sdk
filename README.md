@@ -244,8 +244,14 @@ accountStreamer.onData(processData);
 accountStreamer.start()
 ```
 
-## Adding additional gRPC options
-Users can add the following gRPC options to the `TransactionStreamer` and `AccountStreamer` class. These are optional parameters. 
+
+## Client Configuration and Advanced Streaming Options
+
+This section details the optional configuration parameters and control mechanisms available for the `TransactionStreamer` and `AccountStreamer` classes in the _Ladybug SDK_.
+
+### Customizing gRPC Connection Options
+
+You can pass an optional object containing standard gRPC channel arguments to the constructor of both the `TransactionStreamer` and `AccountStreamer` classes. These options allow for fine-tuning the connection behavior.
 
 ```javascript
 const txnStreamer = new TransactionStreamer(
@@ -255,14 +261,18 @@ const txnStreamer = new TransactionStreamer(
     keepalive_time_ms = 2000,
     keepalive_timeout_ms = 2000,
     max_send_message_length = 1024 * 1024,
-    max_receive_message_length: 1024 * 1024 * 1024
+    max_receive_message_length = 1024 * 1024 * 1024
   }
 );
 ```
+
+
 Tip: `max_receive_message_length` determines the size of the message to be received, when you have a lot of addresses in your subscribe request, it is recommended to set this to a very high value.
 
-## Enabling a Reconnect mechanism
-The _Ladybug SDK_ has an inbuilt reconnection mechanism which reconnects within a second of disconnection. We can enable or disable this using `enableAutoReconnect(boolean)` function. Auto-reconnection is enabled by default.
+### Enabling a Reconnect mechanism
+The _Ladybug SDK_ includes a robust, built-in reconnection mechanism that attempts to re-establish the stream connection within one second of disconnection.
+
+This feature is enabled by default but can be toggled using the `enableAutoReconnect(boolean)` method if you wish to implement custom handling for stream failures.
 
 ```javascript
 const txnStreamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
