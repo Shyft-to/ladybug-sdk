@@ -281,9 +281,20 @@ When the Client disconnects, the reconnect mechanism allows re-connection after 
 
 We can define from which slot data can be streamed using the `setFromSlot()` function.
 
+```javascript
+const txnStreamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+
+txnStreamer.addParser(parser);
+txnStreamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
+txnStreamer.enableAutoReconnect(false); //setting this to false, incase the slot enquired is not available
+
+txnStreamer.setFromSlot(383944613); //set the slot from which you want to resume streaming
+
+txnStreamer.start();
 ```
 
-```
+Please note that if the slot enquired is not available, it will start streaming from the current slot.
+
 
 
 

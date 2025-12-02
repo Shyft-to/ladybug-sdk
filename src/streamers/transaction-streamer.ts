@@ -26,7 +26,8 @@ export class TransactionStreamer {
   private fromSlot?: number;
   private lastReceivedSlot?: number;
   private useLastSlotOnReconnect: boolean = false;
-  
+
+
   private onDataCallback?: (data: any) => void;
   private onErrorCallback?: (err: any) => void;
   private onEndCallback?: () => void;
@@ -40,21 +41,21 @@ export class TransactionStreamer {
    */
   constructor(endpoint: string, xToken?: string, grpcConfig?: gRPCConfig) {
     let grpcConfigtoSet = {};
-    if(grpcConfig){
-      if(grpcConfig.keepalive_time_ms){
-        grpcConfigtoSet = {...grpcConfigtoSet, 'grpc.keepalive_time_ms': grpcConfig.keepalive_time_ms};
+    if (grpcConfig) {
+      if (grpcConfig.keepalive_time_ms) {
+        grpcConfigtoSet = { ...grpcConfigtoSet, 'grpc.keepalive_time_ms': grpcConfig.keepalive_time_ms };
       }
-      if(grpcConfig.keepalive_timeout_ms){
-        grpcConfigtoSet = {...grpcConfigtoSet, 'grpc.keepalive_timeout_ms': grpcConfig.keepalive_timeout_ms};
+      if (grpcConfig.keepalive_timeout_ms) {
+        grpcConfigtoSet = { ...grpcConfigtoSet, 'grpc.keepalive_timeout_ms': grpcConfig.keepalive_timeout_ms };
       }
-      if(grpcConfig.max_send_message_length){
-        grpcConfigtoSet = {...grpcConfigtoSet, 'grpc.max_send_message_length': grpcConfig.max_send_message_length};
+      if (grpcConfig.max_send_message_length) {
+        grpcConfigtoSet = { ...grpcConfigtoSet, 'grpc.max_send_message_length': grpcConfig.max_send_message_length };
       }
-      if(grpcConfig.max_receive_message_length){
-        grpcConfigtoSet = {...grpcConfigtoSet, 'grpc.max_receive_message_length': grpcConfig.max_receive_message_length};
+      if (grpcConfig.max_receive_message_length) {
+        grpcConfigtoSet = { ...grpcConfigtoSet, 'grpc.max_receive_message_length': grpcConfig.max_receive_message_length };
       }
     }
-    this.client = new Client(endpoint, xToken, grpcConfig? grpcConfigtoSet : undefined);
+    this.client = new Client(endpoint, xToken, grpcConfig ? grpcConfigtoSet : undefined);
 
     this.request = {
       accounts: {},
@@ -70,11 +71,11 @@ export class TransactionStreamer {
     };
   }
 
-   /**
-   * Registers a callback to be triggered when a specific instruction is detected in a transaction.
-   * @param instructionName The instruction name (must exist in IDL)
-   * @param callback The function to invoke when that instruction appears in a transaction
-   */
+  /**
+  * Registers a callback to be triggered when a specific instruction is detected in a transaction.
+  * @param instructionName The instruction name (must exist in IDL)
+  * @param callback The function to invoke when that instruction appears in a transaction
+  */
   onDetectInstruction(instructionName: string, callback: (tx: any) => void) {
     if (!this.idlInstructionNames.has(instructionName)) {
       console.warn(`Instruction ${instructionName} not found in IDL`);
@@ -83,7 +84,7 @@ export class TransactionStreamer {
     this.onInstructionCallbacks[instructionName] = callback;
   }
 
- 
+
   /**
    * Sets a callback function to be called when a transaction is received.
    * The callback function takes a single parameter, which is the transaction data.
@@ -114,7 +115,7 @@ export class TransactionStreamer {
    * Sets a callback function to be called when the stream has been closed.
    * This is called after the stream has been ended and the stream is no longer available.
    * @param callback The callback function to call when the stream has been closed.
-   */  
+   */
   onClose(callback: () => void) {
     this.onCloseCallback = callback;
   }
@@ -131,7 +132,7 @@ export class TransactionStreamer {
   setFromSlot(slot: number) {
     this.fromSlot = slot;
   }
-  
+
   resumeFromLastSlot(enabled: boolean) {
     this.useLastSlotOnReconnect = enabled;
   }
@@ -204,7 +205,7 @@ export class TransactionStreamer {
    * Starts the transaction stream, which will keep running until stop is called.
    * The stream will retry indefinitely if an error occurs, with a maximum delay of 30s.
    * The delay between retries will double each time an error occurs, up to a maximum of 30s.
-   */  
+   */
   async start() {
     this.running = true;
     while (this.running) {
@@ -234,27 +235,48 @@ export class TransactionStreamer {
   }
 
   private async handleStream() {
-    //console.log("Subscribing and starting stream...");
-    //check if addresses not empty?
     this.stream = await this.client.subscribe();
 
     const streamClosed = new Promise<void>((resolve, reject) => {
       this.stream!.on("error", (err: any) => {
+        const msg = String(err?.message || err);
+
+        const slotUnavailable =
+          msg.includes("not available") ||
+          msg.includes("unavailable") ||
+          msg.includes("older than") ||
+          msg.includes("newer than") ||
+          msg.includes("out of range") ||
+          msg.includes("last available");
+
+        if (slotUnavailable) {
+          console.warn("⚠️ Slot unavailable:", msg);
+
+          this.fromSlot = undefined;
+          this.useLastSlotOnReconnect = false;
+
+          this.stream?.cancel();
+          reject(err);
+          return;
+        }
+
         if (this.onErrorCallback) this.onErrorCallback(err);
-        reject(err);
         this.stream?.cancel();
+        reject(err);
       });
+
       this.stream!.on("end", () => {
         if (this.onEndCallback) this.onEndCallback();
         resolve();
       });
+
       this.stream!.on("close", () => {
         if (this.onCloseCallback) this.onCloseCallback();
         resolve();
       });
     });
 
-     this.stream.on("data", (data: any) => {
+    this.stream.on("data", (data: any) => {
       try {
         if (data?.transaction?.slot !== undefined) {
           this.lastReceivedSlot = data.transaction.slot;
@@ -262,12 +284,11 @@ export class TransactionStreamer {
 
         const tx = this.parser
           ? this.parser.parseTransaction(
-              this.parser.formatGrpcTransactionData(data.transaction, Date.now())
-            )
+            this.parser.formatGrpcTransactionData(data.transaction, Date.now())
+          )
           : data;
 
         this.detectInstructionType(tx);
-
         if (this.onDataCallback) this.onDataCallback(tx);
       } catch (err) {
         if (this.onErrorCallback) this.onErrorCallback(err);
@@ -279,7 +300,7 @@ export class TransactionStreamer {
 
     this.stream = undefined;
   }
-  
+
   /**
    * Detects which IDL instruction(s) are present in the transaction and calls the corresponding callbacks.
    * @param tx The transaction data.
