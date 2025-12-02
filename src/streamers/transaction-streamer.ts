@@ -129,6 +129,12 @@ export class TransactionStreamer {
     this.autoReconnect = enabled;
   }
 
+  /**
+   * Sets the slot to use when starting the transaction streamer.
+   * This will cause the streamer to start streaming from the specified slot instead of the latest slot.
+   * If set to undefined, the streamer will use the latest slot.
+   * @param slot The slot to use when starting the transaction streamer. If undefined, the latest slot is used.
+   */
   setFromSlot(slot: number) {
     this.fromSlot = slot;
   }
