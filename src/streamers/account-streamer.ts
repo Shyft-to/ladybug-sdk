@@ -4,6 +4,8 @@ import {
 } from "@triton-one/yellowstone-grpc";
 import Client from "@triton-one/yellowstone-grpc";
 import { Parser } from "../parsers/parser";
+import { gRPCConfig } from "./transaction-streamer";
+
 
 export class AccountStreamer {
   private client: Client;
@@ -20,13 +22,33 @@ export class AccountStreamer {
 
   private parser: Parser | undefined = undefined;
 
+  private autoReconnect: boolean = true;
+  private fromSlot?: number;
+  private lastReceivedSlot?: number;
+  private useLastSlotOnReconnect: boolean = false;
+
 /**
  * Initializes the AccountStreamer, which can be used to stream account data and parse it using the provided parser
  * @param endpoint Accepts your Yellowstone gRPC Connection URL
  * @param xToken Accepts your X-token, which is used for authentication
  */
-  constructor(endpoint: string, xToken?: string) {
-    this.client = new Client(endpoint, xToken, undefined);
+  constructor(endpoint: string, xToken?: string, grpcConfig?: gRPCConfig) {
+    let grpcConfigtoSet = {};
+        if (grpcConfig) {
+          if (grpcConfig.keepalive_time_ms) {
+            grpcConfigtoSet = { ...grpcConfigtoSet, 'grpc.keepalive_time_ms': grpcConfig.keepalive_time_ms };
+          }
+          if (grpcConfig.keepalive_timeout_ms) {
+            grpcConfigtoSet = { ...grpcConfigtoSet, 'grpc.keepalive_timeout_ms': grpcConfig.keepalive_timeout_ms };
+          }
+          if (grpcConfig.max_send_message_length) {
+            grpcConfigtoSet = { ...grpcConfigtoSet, 'grpc.max_send_message_length': grpcConfig.max_send_message_length };
+          }
+          if (grpcConfig.max_receive_message_length) {
+            grpcConfigtoSet = { ...grpcConfigtoSet, 'grpc.max_receive_message_length': grpcConfig.max_receive_message_length };
+          }
+        }
+        this.client = new Client(endpoint, xToken, grpcConfig ? grpcConfigtoSet : undefined);
 
     this.request = {
       accounts: {},
@@ -78,9 +100,40 @@ export class AccountStreamer {
     this.onCloseCallback = callback;
   }
 
+  /**
+   * Enables or disables auto reconnect for the account streamer.
+   * When enabled, the streamer will automatically reconnect to the stream if an error occurs.
+   * @param enabled Whether to enable or disable auto reconnect.
+   */
+  enableAutoReconnect(enabled: boolean) {
+    this.autoReconnect = enabled;
+  }
+
+  
+  /**
+   * Sets the slot to start the stream from. This can be used to resume the stream from a specific slot.
+   * If not set, the stream will start from the latest available slot.
+   * @param slot The slot to start the stream from.
+   */
+  setFromSlot(slot: number) {
+    this.fromSlot = slot;
+  }
+
+  resumeFromLastSlot(enabled: boolean) {
+    this.useLastSlotOnReconnect = enabled;
+  }
+
   private updateRequest() {
+    const slotToUse =
+      this.fromSlot !== undefined
+        ? this.fromSlot                     // user-forced slot
+        : this.useLastSlotOnReconnect
+          ? this.lastReceivedSlot           // automatic resume
+          : undefined;   
+    
     this.request = {
       ...this.request,
+      fromSlot: slotToUse ? slotToUse.toString() : undefined,
       accounts: {
         program_name: {
           account: Array.from(this.addresses),
@@ -158,6 +211,10 @@ export class AccountStreamer {
       try {
         await this.handleStream();
       } catch (error) {
+        if (!this.autoReconnect) {
+          console.error("Stream error. Auto-reconnect disabled. Stopping...", error);
+          break;
+        }
         console.error("Stream error, retrying in 1s...", error);
         if (this.onErrorCallback) this.onErrorCallback(error);
         if (!this.running) break;
@@ -183,9 +240,30 @@ export class AccountStreamer {
 
     const streamClosed = new Promise<void>((resolve, reject) => {
       this.stream!.on("error", (err: any) => {
+        const msg = String(err?.message || err);
+
+        const slotUnavailable =
+          msg.includes("not available") ||
+          msg.includes("unavailable") ||
+          msg.includes("older than") ||
+          msg.includes("newer than") ||
+          msg.includes("out of range") ||
+          msg.includes("last available");
+
+        if (slotUnavailable) {
+          console.warn("⚠️ Slot unavailable:", msg);
+
+          this.fromSlot = undefined;
+          this.useLastSlotOnReconnect = false;
+
+          this.stream?.cancel();
+          reject(err);
+          return;
+        }
+
         if (this.onErrorCallback) this.onErrorCallback(err);
+        this.stream?.cancel();
         reject(err);
-        this.stream!.cancel();
       });
 
       this.stream!.on("end", () => {
@@ -203,6 +281,9 @@ export class AccountStreamer {
       if (this.onDataCallback) {
         try {
           if (data.account) {
+            if (data?.account?.slot !== undefined) {
+              this.lastReceivedSlot = data.account.slot;
+            }
             if(this.parser === undefined) {
               this.onDataCallback(data);
               return;
