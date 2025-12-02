@@ -244,6 +244,57 @@ accountStreamer.onData(processData);
 accountStreamer.start()
 ```
 
+## Adding additional gRPC options
+Users can add the following gRPC options to the `TransactionStreamer` and `AccountStreamer` class. These are optional parameters. 
+
+```javascript
+const txnStreamer = new TransactionStreamer(
+  process.env.ENDPOINT!, //your gRPC endpoint
+  process.env.X_TOKEN, //your x-token, optional
+  {
+    keepalive_time_ms = 2000,
+    keepalive_timeout_ms = 2000,
+    max_send_message_length = 1024 * 1024,
+    max_receive_message_length: 1024 * 1024 * 1024
+  }
+);
+```
+Tip: `max_receive_message_length` determines the size of the message to be received, when you have a lot of addresses in your subscribe request, it is recommended to set this to a very high value.
+
+## Enabling a Reconnect mechanism
+The _Ladybug SDK_ has an inbuilt reconnection mechanism which reconnects within a second of disconnection. We can enable or disable this using `enableAutoReconnect(boolean)` function. Auto-reconnection is enabled by default.
+
+```javascript
+const txnStreamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+txnStreamer.addParser(parser);
+
+txnStreamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
+
+txnStreamer.enableAutoReconnect(false);
+// This is enabled by default, can be disabled in the following manner in case you want to implement your own reconnection mechanism.
+
+```
+
+## Streaming data from a particular Slot
+
+When the Client disconnects, the reconnect mechanism allows re-connection after a particular timeout. But during the period of this timeout, some slots are skipped or missed. To deal with this problem, _Ladybug SDK_ allows streaming data from a particular slot.
+
+We can define from which slot data can be streamed using the `setFromSlot()` function.
+
+```javascript
+const txnStreamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+
+txnStreamer.addParser(parser);
+txnStreamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
+txnStreamer.enableAutoReconnect(false); //setting this to false, incase the slot enquired is not available
+
+txnStreamer.setFromSlot(383944613); //set the slot from which you want to resume streaming
+
+txnStreamer.start();
+```
+
+Please note that if the slot enquired is not available, it will start streaming from the current slot.
+
 
 
 
