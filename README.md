@@ -174,7 +174,7 @@ The parser needs to have an IDL added in order to stream transactions from a spe
 ## Examples
 
 
-### Streaming all parsed Pump.fun transactions
+### Stream all Pump.fun transactions (parsed)
 With the streamer and parser both initialized (as illustrated above), we can stream all parsed transaction of a specific program in the following manner. The example illustrates, streaming all pump.fun parsed transactions. This can be achieved using the `onData()` hook which accepts a callback function.  
 
 ```javascript
@@ -204,7 +204,7 @@ async function processData(tx: any) {
 ```
 
 
-### Streaming transactions of a specific event: `Migrate` on Pump.fun
+### Detect token migration on Pump.fun: Streaming transactions of a specific event (`migrate`)
 
 You can use this instruction filtering mechanism to establish a high-speed stream of a specific type of transactions, for example a `buy`, `sell` or transaction. 
 
@@ -217,14 +217,15 @@ import pumpIdl from "./pump_0.1.0.json";
 
 const parser = new Parser();
 parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
-parser.useDefaultInstructionParsing(false);
 
 const streamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
 streamer.addParser(parser);
+//setting up the streamer to stream and parse pumpfun transactions
 
-streamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
+streamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]); //for streaming pumpfun transactions
 
 streamer.onDetectInstruction("migrate", processData);
+//detects the migrate instruction and sends the transaction to the callback function
 
 streamer.start();
 
@@ -234,7 +235,7 @@ async function processData(tx: any) {
 }
 ```
 
-### Streaming transactions of a specific event: Create Pool on Raydium CLMM
+### Detect new Liquidity pool on Raydium CLMM: Streaming `create_pool` on Raydium CLMM
 
 Suppose we have a TransactionStreamer which is set to stream and parse `Raydium CLMM` transactions. Now, we can detect new pools by adding a `onDetectInstruction()` hook, with the `create_pool` instruction in the following manner.
 
@@ -252,6 +253,7 @@ streamer.addParser(parser);
 streamer.addAddresses(["CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"]);
 //Initialized the clmm streamer with Raydium Clmm parser, to stream parsed transactions from the blockchain
 streamer.onDetectInstruction("create_pool", processData);
+//detect the create pool transaction and send to the callback function
 
 streamer.start();
 
