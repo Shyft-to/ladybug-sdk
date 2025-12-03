@@ -1,14 +1,18 @@
-# 🐞 ladybug-sdk: Real-Time Solana Data Streamer
-A TypeScript SDK for streaming and parsing real-time Solana blockchain data using the Yellowstone gRPC service.
+# 🐞 ladybug-sdk: The ultimate toolkit for Yellowstone gRPC streaming and parsing
+Build your trading strategies faster and easily with the ultimate Solana sdk for Yellowstone gRPC streaming and parsing. Stop recreating the parsing wheel and focus on improving your trading strategies.
 
 ## ✨ Features
-- **Real-Time Data:** Stream transactions and account updates directly from the Solana network.
+- **Yellowstone gRPC Abstraction:** Works with Yellowstone gRPC client under the hood while providing a clean and dev-friendly abstraction layer.
 
-- **Data Insight:** The SDK completely abstracts complex parsing logic, automatically handling raw instruction data and events so you receive clean, human-readable objects ready for use.
+- **Parsing:** The SDK completely abstracts complex parsing logic, automatically handling raw instruction data and events so you receive clean, human-readable objects ready for use.
 
-- **Layered Parsing:** We provide specialized parsers for compiled instructions, inner instructions, and program events, giving you complete visibility into every layer of a complex on-chain transaction.
+- **Inner-Instructions:** Takes care of inner-instruction parsing as well, so you dont miss any transaction.
 
-- **Parsing based Usecases:** IDL-based program parsers can be created for any program, which helps in monitoring and parsing their instructions.
+- **Instruction Detection:** Easily listen for instructions or inner-instruction. The sdk will stream and parse behind the hood and only notify you when your instruiction is invoked.
+
+- **Anchor Events:** Parses anchor events as well if enabled.
+
+- **Token and System Program Parsing:** Enable System, Token and Token22 transaction parsing with just a flag.
 
 - **TypeScript Native:** Written in TypeScript for better developer experience and type safety.
 
