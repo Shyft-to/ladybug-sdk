@@ -4,15 +4,15 @@ Build your trading strategies faster and easily with the ultimate Solana sdk for
 ## ✨ Features
 - **Yellowstone gRPC Abstraction:** Works with Yellowstone gRPC client under the hood while providing a clean and dev-friendly abstraction layer.
 
-- **Parsing:** The SDK completely abstracts complex parsing logic, automatically handling raw instruction data and events so you receive clean, human-readable objects ready for use.
-
-- **Inner-Instructions:** Takes care of inner-instruction parsing as well, so you dont miss any transaction.
+- **Parsing:** The SDK completely abstracts complex parsing logic, automatically handling parsing of transaction, anchor events and accounts data so you receive clean, human-readable objects ready for use.
 
 - **Instruction Detection:** Easily listen for instructions or inner-instruction. The sdk will stream and parse behind the hood and only notify you when your instruiction is invoked.
 
-- **Anchor Events:** Parses anchor events as well if enabled.
-
 - **Token and System Program Parsing:** Enable System, Token and Token22 transaction parsing with just a flag.
+
+- **Reconnect Mechanism:** In-built reconnect mechanism on stream interruption.
+
+- **Historical Replay:** Can be configured to stream exactly from where the stream breaks so you dont miss any data.
 
 - **TypeScript Native:** Written in TypeScript for better developer experience and type safety.
 
@@ -58,7 +58,7 @@ parser.useDefaultInstructionParsing(true); // enables in-built parser for Token 
 ## Transaction Streamer
 We can stream parsed transactions using the `TransactionStreamer` class. It accepts your `gRPC url` and `x-token`, and a `parser` object to parse transactions.
 
-### Initialization
+### Initialize Streamer and Parser
 
 A TransactionStreamer can be initialized in the following manner. For streaming parsed transaction, we need to add the respective program's parser in the following manner: 
 
@@ -74,7 +74,7 @@ streamer.addParser(parser);
 //adding Pumpfun parser to the Transaction Streamer
 ```
 
-### Streaming Transactions
+### Stream Transactions for addresses
 Once initialized, we can add the address for which we want to stream transactions. Please note, when streaming data will be parsed for programs whose parsers are added. 
 Since we have added the Pump.fun parser to the Streamer, we are adding the Pump.fun address in this example. Any other address, such as any wallet or pool address can also be added.
 
@@ -106,10 +106,10 @@ streamer.stop() //stop streaming
 streamer.removeAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]) //accepts a list of address and removes it
 ```
 
-### Streaming transactions for specific Instructions
-The parser parses transactions, based on the program IDL. Now, the IDL defines the instructions which are available in the program and due to this we can stream transactions containing specific instructions in the following manner.
+### Instruction Detection
+You can now easily detect instrcutions, by specifying hooks for which instructions you want to lsiten to. The sdk abstracts away all the complexities. Its parses transactions and looks for instructions in both top level and inner instructions.
 
-For example, the pump.fun IDL has various instructions such as: `buy`, `sell`, `migrate` etc. We can stream transactions which contain these instructions in the following manner:
+For example, the pump.fun IDL has various instructions such as: `buy`, `sell`, `migrate` etc. We can detect when a particular instruction gets triggered.
 
 
 ```javascript
@@ -125,7 +125,7 @@ streamer.onDetectInstruction("sell", processData);
 The parser needs to have an IDL added in order to stream transactions from a specific program. 
  
 >Please note that this is not applicable for instructions available in the programs defined in the `default parsers` section.
-## Examples: Use-cases related to a specific dex
+## Examples
 
 ### Initialization
 The TransactionStreamer & Parser can be defined in the same manner as specified above. For this example, we have defined the parser with Pump.fun parser. (Illustrated above as well) 
@@ -137,7 +137,7 @@ streamer.addParser(pumpParser);
 // initialized with pumpfun parser as illustrated above
 ```
 
-### Getting all transactions
+### Getting all pumpfun transactions
 With the streamer and parser both initialized, we can stream all parsed transaction of a specific program in the following manner. The example illustrates, streaming all pump.fun parsed transactions. This can be achieved using the `onData()` hook which accepts a callback function.  
 
 ```javascript
