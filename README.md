@@ -4,9 +4,11 @@ A TypeScript SDK for streaming and parsing real-time Solana blockchain data usin
 ## ✨ Features
 - **Real-Time Data:** Stream transactions and account updates directly from the Solana network.
 
-- **Event Detection:** Built-in logic to easily detect common DeFi events like Buys, Sells, and Token Launches.
+- **Data Insight:** The SDK completely abstracts complex parsing logic, automatically handling raw instruction data and events so you receive clean, human-readable objects ready for use.
 
-- **Parsing based Usecases:** IDL-based program parsers can be created 
+- **Layered Parsing:** We provide specialized parsers for compiled instructions, inner instructions, and program events, giving you complete visibility into every layer of a complex on-chain transaction.
+
+- **Parsing based Usecases:** IDL-based program parsers can be created for any program, which helps in monitoring and parsing their instructions.
 
 - **TypeScript Native:** Written in TypeScript for better developer experience and type safety.
 
@@ -159,8 +161,8 @@ This feature is great for finding important events fast, such as when **someone 
 ```javascript
 streamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
 
-streamer.onDetectedTransactionType("buy", processData);
-streamer.onDetectedTransactionType("sell", processData);
+streamer.onDetectInstruction("buy", processData);
+streamer.onDetectInstruction("sell", processData);
 
 async function processData(processed: any) {
   console.log("Processed:", processed);
@@ -244,8 +246,14 @@ accountStreamer.onData(processData);
 accountStreamer.start()
 ```
 
-## Adding additional gRPC options
-Users can add the following gRPC options to the `TransactionStreamer` and `AccountStreamer` class. These are optional parameters. 
+
+## Client Configuration and Advanced Streaming Options
+
+This section details the optional configuration parameters and control mechanisms available for the `TransactionStreamer` and `AccountStreamer` classes in the _Ladybug SDK_.
+
+### Customizing gRPC Connection Options
+
+You can pass an optional object containing standard gRPC channel arguments to the constructor of both the `TransactionStreamer` and `AccountStreamer` classes. These options allow for fine-tuning the connection behavior.
 
 ```javascript
 const txnStreamer = new TransactionStreamer(
@@ -255,14 +263,18 @@ const txnStreamer = new TransactionStreamer(
     keepalive_time_ms = 2000,
     keepalive_timeout_ms = 2000,
     max_send_message_length = 1024 * 1024,
-    max_receive_message_length: 1024 * 1024 * 1024
+    max_receive_message_length = 1024 * 1024 * 1024
   }
 );
 ```
+
+
 Tip: `max_receive_message_length` determines the size of the message to be received, when you have a lot of addresses in your subscribe request, it is recommended to set this to a very high value.
 
-## Enabling a Reconnect mechanism
-The _Ladybug SDK_ has an inbuilt reconnection mechanism which reconnects within a second of disconnection. We can enable or disable this using `enableAutoReconnect(boolean)` function. Auto-reconnection is enabled by default.
+### Enabling a Reconnect mechanism
+The _Ladybug SDK_ includes a robust, built-in reconnection mechanism that attempts to re-establish the stream connection within one second of disconnection.
+
+This feature is enabled by default but can be toggled using the `enableAutoReconnect(boolean)` method if you wish to implement custom handling for stream failures.
 
 ```javascript
 const txnStreamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
@@ -275,7 +287,7 @@ txnStreamer.enableAutoReconnect(false);
 
 ```
 
-## Streaming data from a particular Slot
+### Streaming data from a particular Slot
 
 When the Client disconnects, the reconnect mechanism allows re-connection after a particular timeout. But during the period of this timeout, some slots are skipped or missed. To deal with this problem, _Ladybug SDK_ allows streaming data from a particular slot.
 
@@ -294,6 +306,52 @@ txnStreamer.start();
 ```
 
 Please note that if the slot enquired is not available, it will start streaming from the current slot.
+
+
+## Latency Checker
+
+The `LatencyChecker` class provides a dedicated mechanism for benchmarking the speed of data delivery from a Solana gRPC endpoint to a consuming application. It subscribes to specific programs, captures both Transaction Status and Block Meta updates, and correlates them to calculate the observed latency.
+
+### Core Functionality
+- Latency Measurement: Calculates the latency as $\text{Time}_{\text{Received}} - \text{Time}_{\text{BlockTime}}$.
+- Latency Distribution: Tracks transaction counts across multiple latency buckets (e.g., `<400 ms`, `<800 ms`, etc).
+- Time-Based Testing: Automatically stops streaming and generates a final report after a configurable duration (testingTime).
+- Parsing Latency (Optional): Can measure the additional overhead if a complex parser is applied to the raw transaction data.
+
+
+### Basic Latency Check
+
+This example sets up the checker to monitor a single account for 30 seconds and then prints the aggregated report.
+
+```javascript
+import { LatencyChecker } from 'ladybug-sdk';
+
+// Replace with your actual gRPC endpoint and token (if needed)
+const ENDPOINT = "YOUR_YELLOWSTONE_GRPC_ENDPOINT"; 
+const X_TOKEN = process.env.X_TOKEN;
+
+// The public key of the account you want to monitor (e.g., a high-activity DEX program)
+const ACCOUNT_TO_MONITOR = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"; 
+
+async function runBasicCheck() {
+    const latencyChecker = new LatencyChecker(ENDPOINT, X_TOKEN);
+
+    // 1. Configure the test duration (30 seconds)
+    latencyChecker.setTestingTime(30 * 1000); 
+
+    // 2. Specify which account transactions to monitor
+    await latencyChecker.addAddresses([ACCOUNT_TO_MONITOR]);
+    
+    console.log(`Starting latency check for ${ACCOUNT_TO_MONITOR} over 30s...`);
+
+    // 3. Start the stream. This function will block until the testingTime is reached.
+    await latencyChecker.start();
+
+    // The report will be automatically printed to the console upon timeout/stop.
+}
+
+runBasicCheck().catch(console.error);
+```
 
 
 
