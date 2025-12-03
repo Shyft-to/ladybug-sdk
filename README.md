@@ -62,7 +62,7 @@ We can fetch a transactions from any Solana RPC, and parse it in the following m
 ```javascript
 import { Idl } from "@coral-xyz/anchor";
 import { PublicKey, Connection } from "@solana/web3.js";
-import { Parser } from "./dist";
+import { Parser } from "@shyft-to/ladybug-sdk";
 import pumpIdl from "./pump_0.1.0.json";
 
 async function getAndParseTxn() {
@@ -112,7 +112,7 @@ Since we have added the Pump.fun parser to the Streamer, we are adding the Pump.
 
 ```javascript
 import { Idl } from "@coral-xyz/anchor";
-import { Parser, TransactionStreamer } from "./dist";
+import { Parser, TransactionStreamer } from "@shyft-to/ladybug-sdk";
 import pumpIdl from "./pump_0.1.0.json";
 
 const parser = new Parser();
@@ -179,7 +179,7 @@ With the streamer and parser both initialized (as illustrated above), we can str
 
 ```javascript
 import { Idl } from "@coral-xyz/anchor";
-import { Parser, TransactionStreamer } from "./dist";
+import { Parser, TransactionStreamer } from "@shyft-to/ladybug-sdk";
 import pumpIdl from "./pump_0.1.0.json";
 
 const parser = new Parser();
@@ -212,7 +212,7 @@ This feature is great for finding important events fast, such as when **someone 
 
 ```javascript
 import { Idl } from "@coral-xyz/anchor";
-import { Parser, TransactionStreamer } from "./dist";
+import { Parser, TransactionStreamer } from "@shyft-to/ladybug-sdk";
 import pumpIdl from "./pump_0.1.0.json";
 
 const parser = new Parser();
@@ -240,7 +240,7 @@ Suppose we have a TransactionStreamer which is set to stream and parse `Raydium 
 
 ```javascript
 import { Idl } from "@coral-xyz/anchor";
-import { Parser, TransactionStreamer } from "./dist";
+import { Parser, TransactionStreamer } from "@shyft-to/ladybug-sdk";
 import ammv3 from "./clmm_0.0.1.json";
 
 const parser = new Parser();
@@ -271,7 +271,7 @@ An `AcountStreamer` can be initialized in the following manner. Similar to trans
 
 ```javascript
 // Initializing Parser with Raydium CLMM IDL
-import { Parser, AccountStreamer } from "./dist";
+import { Parser, AccountStreamer } from "@shyft-to/ladybug-sdk";
 
 const parser = new Parser();
 parser.addIDL(new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), clmmIdl as Idl);
@@ -299,17 +299,64 @@ accountStreamer.start()
 //starts streaming accounts.
 ```
 
-### Streaming updates for a single account (updates for a liquidity pool)
+### Example: Streaming all parsed Pump.fun account information
 
-We can use the `AccountStreamer` class to monitor changes to just one specific account on the Solana blockchain. This can be particularly useful in monitoring the exact, **current state of a liquidity pool** to see real-time shifts in its available funds, or monitoring a token's **bonding curve account** very closely before migration.
+This class sets up a dedicated stream to receive and automatically parse all account updates related to the Pump.fun program, providing real-time structured data for every relevant event.
 
 ```javascript
-accountStreamer.addAddresses(["4ajsg9YY1YKd2yYSbWicAe8uZ5ZSrHQ4dcWN2xedoqsN"]);
-// address of the account you want to monitor
+import { Idl } from "@coral-xyz/anchor";
+import { Parser, AccountStreamer } from "@shyft-to/ladybug-sdk";
+import pumpIdl from "./pump_0.1.0.json";
 
-accountStreamer.onData(processData);
+const parser = new Parser();
+parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
 
-accountStreamer.start()
+const accStreamer = new AccountStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+accStreamer.addParser(parser);
+//setting up the account streamer to parse Pump.fun accounts
+
+accStreamer.addOwners(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
+//Account updates for accounts owned by this program is streamed
+
+accStreamer.onData(processData);
+
+accStreamer.start();
+
+async function processData(tx: any) {
+  console.log("\n\nParsed Account:\n");
+  console.log(JSON.stringify(tx)); 
+}
+```
+
+
+### Streaming updates for a single account: Account updates for a Liquidity Pool
+
+We can use the `AccountStreamer` class to monitor changes to just one specific account on the Solana blockchain. This can be particularly useful in monitoring the exact, **current state of a liquidity pool** to see real-time shifts in its available funds, or monitoring a token's **bonding curve account** very closely before migration. We can stream transactions for a liquidity pool in the following manner: 
+
+```javascript
+import { Idl } from "@coral-xyz/anchor";
+import { Parser, AccountStreamer } from "@shyft-to/ladybug-sdk";
+import meteoraIdl from "./meteora_0.0.1.json";
+
+const parser = new Parser();
+parser.addIDL(new PublicKey("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"), meteoraIdl as Idl);
+parser.useDefaultInstructionParsing(false);
+
+const accStreamer = new AccountStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+accStreamer.addParser(parser);
+//setting up the account parser to stream meteora liquidity pool transactions
+
+accStreamer.addAddresses(["4ajsg9YY1YKd2yYSbWicAe8uZ5ZSrHQ4dcWN2xedoqsN"]);
+// add the account address for which the updates will be streamed. Updates will be streamed as soon as this account changes state
+
+accStreamer.onData(processData);
+accStreamer.start();
+
+async function processData(tx: any) {
+  //receive the parsed account info
+  console.log("\n\nParsed Account:\n");
+  console.log(JSON.stringify(tx)); 
+}
 ```
 
 
@@ -390,7 +437,7 @@ The `LatencyChecker` class provides a dedicated mechanism for benchmarking the s
 This example sets up the checker to monitor a single account for 30 seconds and then prints the aggregated report.
 
 ```javascript
-import { LatencyChecker } from 'ladybug-sdk';
+import { LatencyChecker } from '@shyft-to/ladybug-sdk';
 
 // Replace with your actual gRPC endpoint and token (if needed)
 const ENDPOINT = "YOUR_YELLOWSTONE_GRPC_ENDPOINT"; 
