@@ -22,7 +22,7 @@ The parser accepts two types of IDL, the IDL which are compatible with `@coral-x
 
 ### Initialization
 ```javascript
-import { Parser } from "ladybug";
+import { Parser } from "@shyft-to/ladybug-sdk";
 import { Idl as coralXyzIdl } from "@coral-xyz/anchor";
 import { Idl as projectSerumIdl } from "@project-serum/anchor";
 
@@ -55,6 +55,38 @@ parser.addIDL(new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), clm
 parser.useDefaultInstructionParsing(true); // enables in-built parser for Token Program, Token 2022 and System Program
 ```
 
+### Complete parser example
+
+We can fetch a transactions from any Solana RPC, and parse it in the following manner with default instruction parsing enabled.
+
+```javascript
+import { Idl } from "@coral-xyz/anchor";
+import { PublicKey, Connection } from "@solana/web3.js";
+import { Parser } from "@shyft-to/ladybug-sdk";
+import pumpIdl from "./pump_0.1.0.json";
+
+async function getAndParseTxn() {
+  const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+  const parser = new Parser();
+  parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
+  parser.useDefaultInstructionParsing(true);
+
+  const txnSignature = "VPKRYrn8q7FzJdEboDPGMXKPD5ne6Qab5wjfKqUDF6adm9BGkhz2E91E6NrsoPsvwtKtE7pzv4A8BDyaknQdk3X";
+
+  const transaction = await connection.getTransaction(txnSignature, {
+      maxSupportedTransactionVersion: 0
+    });
+  
+  if(!transaction) throw new Error("Transaction not found");
+  const parsed = parser.parseTransaction(transaction);
+
+  console.log(JSON.stringify(parsed));
+}
+
+getAndParseTxn();
+```
+
 ## Transaction Streamer
 We can stream parsed transactions using the `TransactionStreamer` class. It accepts your `gRPC url` and `x-token`, and a `parser` object to parse transactions.
 
@@ -79,13 +111,26 @@ Once initialized, we can add the address for which we want to stream transaction
 Since we have added the Pump.fun parser to the Streamer, we are adding the Pump.fun address in this example. Any other address, such as any wallet or pool address can also be added.
 
 ```javascript
+import { Idl } from "@coral-xyz/anchor";
+import { Parser, TransactionStreamer } from "@shyft-to/ladybug-sdk";
+import pumpIdl from "./pump_0.1.0.json";
+
+const parser = new Parser();
+parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
+// Initializing parser with Pump.fun IDL
+
+const streamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+streamer.addParser(parser);
+// setting up streamer to parse using the Pump.fun parser
 
 streamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
-//add address
+// adds the address to stream data from
 
-streamer.onData(callbackFn) //adds a callback function to handle incoming data
+streamer.onData(processData);
+// set the callback function that receives the data
 
-streamer.start() //starts streaming transactions
+streamer.start();
+//starts streaming transactions
 ```
 
 `callbackFn` is the function which received the incoming transactions for further processing. Here is a sample function that just prints the transactions which are received. 
@@ -125,80 +170,99 @@ streamer.onDetectInstruction("sell", processData);
 The parser needs to have an IDL added in order to stream transactions from a specific program. 
  
 >Please note that this is not applicable for instructions available in the programs defined in the `default parsers` section.
+
 ## Examples
 
-### Initialization
-The TransactionStreamer & Parser can be defined in the same manner as specified above. For this example, we have defined the parser with Pump.fun parser. (Illustrated above as well) 
+
+### Stream all Pump.fun transactions (parsed)
+With the streamer and parser both initialized (as illustrated above), we can stream all parsed transaction of a specific program in the following manner. The example illustrates, streaming all pump.fun parsed transactions. This can be achieved using the `onData()` hook which accepts a callback function.  
 
 ```javascript
-import { TransactionStreamer } from "./dist";
-const streamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
-streamer.addParser(pumpParser);
-// initialized with pumpfun parser as illustrated above
-```
-
-### Getting all pumpfun transactions
-With the streamer and parser both initialized, we can stream all parsed transaction of a specific program in the following manner. The example illustrates, streaming all pump.fun parsed transactions. This can be achieved using the `onData()` hook which accepts a callback function.  
-
-```javascript
-streamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
-//add pumpfun address to stream pumpfun transactions
-
-streamer.onData(processData);
-// add a callback function to stream data
-
-streamer.start();
-// function to start streaming transactions
-
-async function processData(txn) {
-  console.log("Received Transaction:", txn);
-}
-```
-
-
-### Streaming transactions of a specific event: Buy/Sell on Pump.fun
-
-You can use this instruction filtering mechanism to establish a high-speed stream of a specific type of transactions, for example a `buy` or `sell` transaction. 
-
-This feature is great for finding important events fast, such as when **someone buys or sells a token** on platforms like Pump.fun. Turn on transaction parsing. This makes sure you get the full, easy-to-read details of the transaction as soon as the buy or sell happens on the chain.
-
-```javascript
-streamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
-
-streamer.onDetectInstruction("buy", processData);
-streamer.onDetectInstruction("sell", processData);
-
-async function processData(processed: any) {
-  console.log("Processed:", processed);
-}
-```
-
-### Streaming transactions of a specific event: Create Pool on Raydium CLMM
-
-Suppose we have a TransactionStreamer which is set to stream and parse `Raydium CLMM` transactions.
-
-```javascript
-import { TransactionStreamer, Parser } from "./dist";
+import { Idl } from "@coral-xyz/anchor";
+import { Parser, TransactionStreamer } from "@shyft-to/ladybug-sdk";
+import pumpIdl from "./pump_0.1.0.json";
 
 const parser = new Parser();
-parser.addIDL(new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), clmmIdl as Idl);
-parser.useDefaultInstructionParsing(true);
+parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
+const streamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+//add grpc url and x-token here
+streamer.addParser(parser);
+//initialized the streamer to stream Pump.fun transactions
 
-const clmmStreamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
-clmmStreamer.addParser(parser);
+streamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
 
-//Initialized the clmm streamer with Raydium Clmm parser, to stream parsed transactions from the blockchain
+streamer.onData(processData);
+
+streamer.start();
+//start streaming parsed transactions
+
+async function processData(tx: any) {
+  // callback function that accepts and can process the incoming parsed transaction
+  console.log("\n\nProcessed:\n");
+  console.log(JSON.stringify(tx)); 
+}
 ```
-Now, we can detect new pools by adding a `onDetectInstruction()` hook, with the `create_pool` instruction in the following manner.
+
+
+### Detect token migration on Pump.fun: Streaming transactions of a specific event (`migrate`)
+
+You can use this instruction filtering mechanism to establish a high-speed stream of a specific type of transactions, for example a `buy`, `sell` or transaction. 
+
+This feature is great for finding important events fast, such as when **someone buys or sells a token** on platforms like Pump.fun, or when a **token migration takes place**. This makes sure you get the full, easy-to-read details of the transaction as soon as the buy, sell, or migration happens on the chain.
+
 ```javascript
+import { Idl } from "@coral-xyz/anchor";
+import { Parser, TransactionStreamer } from "@shyft-to/ladybug-sdk";
+import pumpIdl from "./pump_0.1.0.json";
 
-clmmStreamer.addAddresses(["CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"]);
+const parser = new Parser();
+parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
 
-clmmStreamer.onDetectInstruction("create_pool", processData);
+const streamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+streamer.addParser(parser);
+//setting up the streamer to stream and parse pumpfun transactions
 
-clmmStreamer.start()
+streamer.addAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]); //for streaming pumpfun transactions
 
+streamer.onDetectInstruction("migrate", processData);
+//detects the migrate instruction and sends the transaction to the callback function
+
+streamer.start();
+
+async function processData(tx: any) {
+  console.log("\n\nProcessed:\n");
+  console.log(JSON.stringify(tx)); 
+}
 ```
+
+### Detect new Liquidity pool on Raydium CLMM: Streaming `create_pool` on Raydium CLMM
+
+Suppose we have a TransactionStreamer which is set to stream and parse `Raydium CLMM` transactions. Now, we can detect new pools by adding a `onDetectInstruction()` hook, with the `create_pool` instruction in the following manner.
+
+```javascript
+import { Idl } from "@coral-xyz/anchor";
+import { Parser, TransactionStreamer } from "@shyft-to/ladybug-sdk";
+import ammv3 from "./clmm_0.0.1.json";
+
+const parser = new Parser();
+parser.addIDL(new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), ammv3 as Idl);
+
+const streamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+streamer.addParser(parser);
+
+streamer.addAddresses(["CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"]);
+//Initialized the clmm streamer with Raydium Clmm parser, to stream parsed transactions from the blockchain
+streamer.onDetectInstruction("create_pool", processData);
+//detect the create pool transaction and send to the callback function
+
+streamer.start();
+
+async function processData(tx: any) {
+  console.log("\n\nProcessed:\n");
+  console.log(JSON.stringify(tx)); 
+}
+```
+
 This streams all transactions which contains the `create_pool` instruction from Raydium CLMM. 
 
 ## Account Streamer
@@ -209,7 +273,7 @@ An `AcountStreamer` can be initialized in the following manner. Similar to trans
 
 ```javascript
 // Initializing Parser with Raydium CLMM IDL
-import { Parser, AccountStreamer } from "./dist";
+import { Parser, AccountStreamer } from "@shyft-to/ladybug-sdk";
 
 const parser = new Parser();
 parser.addIDL(new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), clmmIdl as Idl);
@@ -237,17 +301,64 @@ accountStreamer.start()
 //starts streaming accounts.
 ```
 
-### Streaming updates for a single account (updates for a liquidity pool)
+### Example: Streaming all parsed Pump.fun account information
 
-We can use the `AccountStreamer` class to monitor changes to just one specific account on the Solana blockchain. This can be particularly useful in monitoring the exact, **current state of a liquidity pool** to see real-time shifts in its available funds, or monitoring a token's **bonding curve account** very closely before migration.
+This class sets up a dedicated stream to receive and automatically parse all account updates related to the Pump.fun program, providing real-time structured data for every relevant event.
 
 ```javascript
-accountStreamer.addAddresses(["4ajsg9YY1YKd2yYSbWicAe8uZ5ZSrHQ4dcWN2xedoqsN"]);
-// address of the account you want to monitor
+import { Idl } from "@coral-xyz/anchor";
+import { Parser, AccountStreamer } from "@shyft-to/ladybug-sdk";
+import pumpIdl from "./pump_0.1.0.json";
 
-accountStreamer.onData(processData);
+const parser = new Parser();
+parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
 
-accountStreamer.start()
+const accStreamer = new AccountStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+accStreamer.addParser(parser);
+//setting up the account streamer to parse Pump.fun accounts
+
+accStreamer.addOwners(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]);
+//Account updates for accounts owned by this program is streamed
+
+accStreamer.onData(processData);
+
+accStreamer.start();
+
+async function processData(tx: any) {
+  console.log("\n\nParsed Account:\n");
+  console.log(JSON.stringify(tx)); 
+}
+```
+
+
+### Streaming updates for a single account: Account updates for a Liquidity Pool
+
+We can use the `AccountStreamer` class to monitor changes to just one specific account on the Solana blockchain. This can be particularly useful in monitoring the exact, **current state of a liquidity pool** to see real-time shifts in its available funds, or monitoring a token's **bonding curve account** very closely before migration. We can stream transactions for a liquidity pool in the following manner: 
+
+```javascript
+import { Idl } from "@coral-xyz/anchor";
+import { Parser, AccountStreamer } from "@shyft-to/ladybug-sdk";
+import meteoraIdl from "./meteora_0.0.1.json";
+
+const parser = new Parser();
+parser.addIDL(new PublicKey("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"), meteoraIdl as Idl);
+parser.useDefaultInstructionParsing(false);
+
+const accStreamer = new AccountStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+accStreamer.addParser(parser);
+//setting up the account parser to stream meteora liquidity pool transactions
+
+accStreamer.addAddresses(["4ajsg9YY1YKd2yYSbWicAe8uZ5ZSrHQ4dcWN2xedoqsN"]);
+// add the account address for which the updates will be streamed. Updates will be streamed as soon as this account changes state
+
+accStreamer.onData(processData);
+accStreamer.start();
+
+async function processData(tx: any) {
+  //receive the parsed account info
+  console.log("\n\nParsed Account:\n");
+  console.log(JSON.stringify(tx)); 
+}
 ```
 
 
@@ -328,7 +439,7 @@ The `LatencyChecker` class provides a dedicated mechanism for benchmarking the s
 This example sets up the checker to monitor a single account for 30 seconds and then prints the aggregated report.
 
 ```javascript
-import { LatencyChecker } from 'ladybug-sdk';
+import { LatencyChecker } from '@shyft-to/ladybug-sdk';
 
 // Replace with your actual gRPC endpoint and token (if needed)
 const ENDPOINT = "YOUR_YELLOWSTONE_GRPC_ENDPOINT"; 
