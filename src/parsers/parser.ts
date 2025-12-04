@@ -452,6 +452,37 @@ export class Parser {
     }
   }
 
+  private convertLoadedAddresses(loaded?: {
+    writable: PublicKey[] | string[];
+    readonly: PublicKey[] | string[];
+  }) {
+    if (!loaded) return { writable: [], readonly: [] };
+
+    return {
+      writable: loaded.writable.map((k: any) =>
+        typeof k === "string" ? k : k.toBase58()
+      ),
+      readonly: loaded.readonly.map((k: any) =>
+        typeof k === "string" ? k : k.toBase58()
+      ),
+    };
+  }
+
+  private convertAddressTableLookups(lookups?: {
+    accountKey: PublicKey;
+    writableIndexes: number[];
+    readonlyIndexes: number[];
+  }[]) {
+    if (!lookups) return [];
+
+    return lookups.map(l => ({
+      accountKey: l.accountKey.toBase58(),
+      writableIndexes: l.writableIndexes,
+      readonlyIndexes: l.readonlyIndexes,
+    }));
+  }
+
+
 
   /**
    * Parse a transaction and return a new transaction with parsed instructions and events.
@@ -500,6 +531,7 @@ export class Parser {
         meta: tx.meta && {
           ...tx.meta,
           innerInstructions: parsedInnerInstructions,
+          loadedAddresses: this.convertLoadedAddresses(tx.meta.loadedAddresses),
         },
       };
       return txWithParsed;
@@ -519,6 +551,9 @@ export class Parser {
           staticAccountKeys: txMessage.staticAccountKeys.map((key: PublicKey) =>
             key.toBase58()
           ),
+          addressTableLookups: this.convertAddressTableLookups(
+            txMessage.addressTableLookups
+          ),
           compiledInstructions: parsedCompiledInstruction,
           events: plaintextFormatter(parsedEvents),
         },
@@ -526,6 +561,7 @@ export class Parser {
       meta: tx.meta && {
         ...tx.meta,
         innerInstructions: parsedInnerInstructions,
+        loadedAddresses: this.convertLoadedAddresses(tx.meta.loadedAddresses),
       },
     };
 
