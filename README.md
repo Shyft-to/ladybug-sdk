@@ -88,11 +88,19 @@ getAndParseTxn();
 ```
 
 ## Transaction Streamer
-We can stream parsed transactions using the `TransactionStreamer` class. It accepts your `gRPC url` and `x-token`, and a `parser` object to parse transactions.
+The `TransactionStreamer` class is used to stream parsed Solana transactions in real-time. It requires a `gRPC endpoint`, an `access token`, and one or more parsers to parse the transaction data.
 
 ### Initialize Streamer and Parser
 
-A TransactionStreamer can be initialized in the following manner. For streaming parsed transaction, we need to add the respective program's parser in the following manner: 
+The Parser is essential for converting raw transaction data into human-readable, structured data based on a program IDL.
+
+- Initialize the Parser and load the program's IDL (e.g., Pump.fun's IDL) using its Program ID.
+
+- Initialize the TransactionStreamer with your gRPC endpoint and token.
+
+- Attach the configured parser to the streamer.
+
+The streamer and parser can be initialized in the following manner
 
 ```javascript
 const parser = new Parser();
@@ -152,7 +160,7 @@ streamer.removeAddresses(["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]) //acce
 ```
 
 ### Instruction Detection
-You can now easily detect instrcutions, by specifying hooks for which instructions you want to lsiten to. The sdk abstracts away all the complexities. Its parses transactions and looks for instructions in both top level and inner instructions.
+You can now easily detect instructions, by specifying hooks for which instructions you want to listen to. The sdk abstracts away all the complexities. Its parses transactions and looks for instructions in both top level and inner instructions.
 
 For example, the pump.fun IDL has various instructions such as: `buy`, `sell`, `migrate` etc. We can detect when a particular instruction gets triggered.
 
