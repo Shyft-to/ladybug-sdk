@@ -4,7 +4,10 @@
   "description": "The ultimate toolkit for Yellowstone gRPC streaming and parsing",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup"
   },
