@@ -1,16 +1,24 @@
 {
-  "name": "ladybug-sdk",
+  "name": "@shyft-to/ladybug-sdk",
   "version": "0.0.1",
-  "description": "Complete Solana Parser",
+  "description": "The ultimate toolkit for Yellowstone gRPC streaming and parsing",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["solana", "anchor", "sdk", "parser", "yellowstone", "grpc", "streaming"],
+  "homepage": "https://shyft.to",
   "license": "MIT",
+  "author": "shyft-to",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shyft-to/ladybug-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Shyft-to/ladybug-sdk/issues"
+  },
   "devDependencies": {
     "@types/bn.js": "^5.2.0",
     "@types/lodash": "^4.17.20",
@@ -29,5 +37,9 @@
     "@triton-one/yellowstone-grpc": "^4.0.2",
     "bn.js": "^5.2.2",
     "lodash": "^4.17.21"
+  },
+  "private": false,
+  "publishConfig": {
+    "access": "public"
   }
 }
