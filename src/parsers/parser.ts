@@ -92,7 +92,7 @@ export class Parser {
   private parseDefaultInstructions: boolean = false;
   // accountParsers: Map<string, ParserParams> = new Map();
   private instructionSet: Set<string> = new Set();
-  private enableLogs: boolean = false;
+  private enableLogs: boolean = true;
 
   /**
    * This parser uses the IDLs to parse the transaction and accounts data. A parser can take multiple IDLs.
@@ -853,5 +853,14 @@ export class Parser {
       executable: geyserAcc.account.executable,
       rentEpoch: Number(geyserAcc.account.rentEpoch),
     };
+  }
+
+  /**
+   * Enables or disables logging for the parser. Enabled by default.
+   * When enabled, the parser will log parsed data to the console.
+   * @param {boolean} enable - Whether to enable or disable logging.
+   */
+  enableLogging(enable: boolean) {
+    this.enableLogs = enable;
   }
 }
