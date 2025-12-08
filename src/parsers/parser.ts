@@ -92,6 +92,7 @@ export class Parser {
   private parseDefaultInstructions: boolean = false;
   // accountParsers: Map<string, ParserParams> = new Map();
   private instructionSet: Set<string> = new Set();
+  private enableLogs: boolean = false;
 
   /**
    * This parser uses the IDLs to parse the transaction and accounts data. A parser can take multiple IDLs.
@@ -252,7 +253,7 @@ export class Parser {
         }
         if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
           const keys = getInstructionAccountMetas(accounts, superMap);
-          const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+          const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)}, this.enableLogs);
           // const acc = "keys" in decodedIx && Array.isArray(decodedIx.keys) && decodedIx.keys
           // ? decodedIx.keys.map((k) => k.pubkey.toBase58())
           // : accounts;
@@ -265,13 +266,24 @@ export class Parser {
         }
         if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
           const keys = getInstructionAccountMetas(accounts, superMap);
-          const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: Buffer.from(ix.data)});
+          try {
+            const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: Buffer.from(ix.data)});
           
-          decoded.push({
-            programId,
-            accounts,
-            data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
-          });
+            decoded.push({
+              programId,
+              accounts,
+              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+            });  
+          } catch (error) {
+            if(this.enableLogs)
+              console.log(`Error decoding token 2022 instruction: ${ix.data}`);
+            decoded.push({
+              programId,
+              accounts,
+              data: bs58.encode(ix.data) || ix.data
+            })
+          }
+          
           continue;
         }
       }
@@ -292,9 +304,10 @@ export class Parser {
           coder.instruction.decode(Buffer.from(ix.data))
         );
       } catch (error) {
-        console.log(
-          `Error decoding instruction by idl: ${ix.data} for program ${programId}`
-        );
+        if(this.enableLogs)
+          console.log(
+            `Error decoding instruction by idl: ${ix.data} for program ${programId}`
+          );
         decodedInstruction = bs58.encode(ix.data) || ix.data;
       }
 
@@ -370,13 +383,25 @@ export class Parser {
           }
           if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
             const keys = getInstructionAccountMetas(accounts, superMap);
-            const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: bs58.decode(ix.data)});
-            decoded.push({
-              outerIndex,
-              programId,
-              accounts,
-              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
-            });
+            try {
+              const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: bs58.decode(ix.data)});
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+              });  
+            } catch (error) {
+              if(this.enableLogs)
+                console.log(`Error decoding token 2022 instruction: ${ix.data}`);
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: ix.data
+              })
+            }
+            
             continue;
           }
         }
