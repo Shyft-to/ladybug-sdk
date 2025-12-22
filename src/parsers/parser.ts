@@ -44,11 +44,12 @@ import {
   ReadableLegacyTransactionResponse,
   ReadableV0TransactionResponse,
 } from "../types";
-import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { decodeTokenInstruction } from "./token-program-parser";
 import { SYSTEM_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/native/system";
 import { decodeSystemInstruction } from "./system-program-parser";
 import { decodeToken2022Instruction } from "./token-2022-parser";
+import { decodeAssociatedTokenInstruction } from "./associated-token-parser";
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 
 type AnyIdl = CoralIdl | SerumIdl;
@@ -264,6 +265,27 @@ export class Parser {
           });
           continue;
         }
+        if(programId === ASSOCIATED_TOKEN_PROGRAM_ID.toBase58()) {
+          const keys = getInstructionAccountMetas(accounts, superMap);
+          try {
+            const decodedIx = decodeAssociatedTokenInstruction({keys,programId: ASSOCIATED_TOKEN_PROGRAM_ID, data: Buffer.from(ix.data)});
+            decoded.push({
+              programId,
+              accounts,
+              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+            });
+          } catch (error) {
+            if(this.enableLogs)
+              console.log(`Error decoding associated token instruction: ${ix.data}`);
+            decoded.push({
+              programId,
+              accounts,
+              data: bs58.encode(ix.data) || ix.data
+            })
+          }
+          
+          continue;
+        }
         if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
           const keys = getInstructionAccountMetas(accounts, superMap);
           try {
@@ -379,6 +401,29 @@ export class Parser {
               accounts,
               data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
             });
+            continue;
+          }
+          if(programId === ASSOCIATED_TOKEN_PROGRAM_ID.toBase58()) {
+            const keys = getInstructionAccountMetas(accounts, superMap);
+            try {
+              const decodedIx = decodeAssociatedTokenInstruction({keys,programId: ASSOCIATED_TOKEN_PROGRAM_ID, data: Buffer.from(ix.data)});
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+              });
+            } catch (error) {
+              if(this.enableLogs)
+                console.log(`Error decoding associated token instruction: ${ix.data}`);
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: ix.data
+              })
+            }
+            
             continue;
           }
           if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
