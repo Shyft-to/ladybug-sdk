@@ -44,6 +44,7 @@ The SDK contains a default parser for
 - System Program (`11111111111111111111111111111111`), 
 - Token Program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) 
 - Token 2022 Program (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`) 
+- Associated Token Program (``)
 
 and parsed instructions for these can be enabled using the `useDefaultInstructionParsing()` function. This is disabled by default (set to  `false`).
 
@@ -53,6 +54,32 @@ parser.addIDL(new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), clm
 // after the initialization step
 
 parser.useDefaultInstructionParsing(true); // enables in-built parser for Token Program, Token 2022 and System Program
+```
+
+### Turn off Error Logs
+We can enable or disable logs from the parser by passing `true` or `false` in the `enableLogging` function in the Parser class. This is enabled by default.
+
+```javascript
+  const parser = new Parser();
+  parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
+  parser.addIDL(new PublicKey("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"), pumpAmmIdl as Idl);
+
+  parser.useDefaultInstructionParsing(true);
+  parser.enableLogging(false); //setting this to false will turn off logs
+  // parser.enableEventParsing(true);
+```
+
+
+### Toggle Event Parsing
+Since Events are parsed based on log messages, in certain cases when log messages are trimmed, we do not get parsed events properly. We can enable or disable **Event parsing** by passing `true` or `false` in the `enableEventParsing` function in the Parser class. This is enabled by default.
+
+```javascript
+  const parser = new Parser();
+  parser.addIDL(new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"), pumpIdl as Idl);
+  parser.addIDL(new PublicKey("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"), pumpAmmIdl as Idl);
+
+  parser.useDefaultInstructionParsing(true);
+  parser.enableEventParsing(false); //Setting this to false will no longer return parsed events
 ```
 
 ### Complete parser example
@@ -272,6 +299,50 @@ async function processData(tx: any) {
 ```
 
 This streams all transactions which contains the `create_pool` instruction from Raydium CLMM. 
+
+### Streaming and parsing multiple dexes
+
+In certain cases, we have to stream data from multiple dexes all at once, and we need multiple dex specific parsers for that purpose. It can be achieved in the following manner.
+
+```javascript
+import "dotenv/config";
+import { TransactionStreamer, Parser } from "@shyft-to/ladybug-sdk";
+import { Idl } from "@coral-xyz/anchor";
+import { Idl as projectSerumIdl } from "@project-serum/anchor";
+import { Connection, PublicKey } from "@solana/web3.js";
+
+import pumpAmmIdl from "./pump_amm_0.1.0.json"
+import meteoraIdl from "./meteora_pools_program.json";
+import meteoraVaultIdl from "./vault.json";
+import pumpIdl from "./pump_0.1.0.json";
+
+const parser = new Parser();
+parser.addIDL(new PublicKey("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"), pumpAmmIdl as Idl);
+parser.addIDL(new PublicKey("Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB"), meteoraIdl as projectSerumIdl);
+parser.addIDL(new PublicKey("24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi"), meteoraVaultIdl as projectSerumIdl);
+//adding IDLs of multiple DEXES to the parser
+parser.useDefaultInstructionParsing(true);
+//enabled default instruction parsing as well
+
+const txnStreamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+txnStreamer.addParser(parser);
+//initializing streamer with above parser
+
+txnStreamer.addAddresses(["Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB"]);
+txnStreamer.addAddresses(["pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"]);
+//adding addresses for streaming multiple DEXEs, can be done in a single array as well
+
+txnStreamer.onData(processData);
+txnStreamer.start();
+
+
+async function processData(processed: any) {
+  console.log("Processed:");
+  console.log(JSON.stringify(processed));
+  
+}
+
+```
 
 ## Account Streamer
 We can stream parsed account data using the `AccounStreamer` class. Similar to transactions, it also accepts your `gRPC url` and `x-token`, and a `parser` object to stream parsed account data in real-time.

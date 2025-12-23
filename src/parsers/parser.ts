@@ -331,24 +331,29 @@ export class Parser {
         continue;
       }
       const coder = this.solanaDataParsers.get(programId)!.coder;
-      let decodedInstruction;
       try {
-        decodedInstruction = plaintextFormatter(
-          coder.instruction.decode(Buffer.from(ix.data))
-        );
+        let decodedInstruction;
+        if (typeof ix.data === "string" || !ix.data) {
+          decodedInstruction = coder.instruction.decode(ix.data, "base58");
+        } else {
+          decodedInstruction = coder.instruction.decode(bs58.encode(ix.data),"base58");
+        }
+        decoded.push({
+          programId,
+          accounts,
+          data: plaintextFormatter(decodedInstruction),
+        });
       } catch (error) {
         if(this.enableLogs)
           console.log(
             `Error decoding instruction by idl: ${ix.data} for program ${programId}`
           );
-        decodedInstruction = bs58.encode(ix.data) || ix.data;
+        decoded.push({
+          programId,
+          accounts,
+          data: bs58.encode(ix.data) || ix.data,
+        });
       }
-
-      decoded.push({
-        programId,
-        accounts,
-        data: decodedInstruction,
-      });
     }
 
     return decoded;
@@ -428,7 +433,7 @@ export class Parser {
           if(programId === ASSOCIATED_TOKEN_PROGRAM_ID.toBase58()) {
             const keys = getInstructionAccountMetas(accounts, superMap);
             try {
-              const decodedIx = decodeAssociatedTokenInstruction({keys,programId: ASSOCIATED_TOKEN_PROGRAM_ID, data: Buffer.from(ix.data)});
+              const decodedIx = decodeAssociatedTokenInstruction({keys,programId: ASSOCIATED_TOKEN_PROGRAM_ID, data: bs58.decode(ix.data)});
               decoded.push({
                 outerIndex,
                 programId,
@@ -500,10 +505,11 @@ export class Parser {
         const coder = parser.coder;
         try {
           let decodedIx;
-          if (parser.isCoral) {
-            decodedIx = coder.instruction.decode(ix.data);
-          } else {
+          
+          if (typeof ix.data === "string" || !ix.data) {
             decodedIx = coder.instruction.decode(ix.data, "base58");
+          } else {
+            decodedIx = coder.instruction.decode(ix.data);
           }
 
           decoded.push({
@@ -764,7 +770,7 @@ export class Parser {
           }) => ({
             programIdIndex: programIdIndex,
             accountKeyIndexes: Array.from(accounts),
-            data: Uint8Array.from(Buffer.from(data || "", "base64")),
+            data: Buffer.from(data || "", "base64"),
           })
         ),
         addressTableLookups:
