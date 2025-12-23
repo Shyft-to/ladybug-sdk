@@ -94,6 +94,7 @@ export class Parser {
   // accountParsers: Map<string, ParserParams> = new Map();
   private instructionSet: Set<string> = new Set();
   private enableLogs: boolean = true;
+  private eventParsingEnabled: boolean = true;
 
   /**
    * This parser uses the IDLs to parse the transaction and accounts data. A parser can take multiple IDLs.
@@ -243,13 +244,23 @@ export class Parser {
         const superMap = buildAccountMetaMap(accountKeys, messageHeader, loadedAddresses);
         const keys = getInstructionAccountMetas(accounts, superMap);
         if(programId === TOKEN_PROGRAM_ID.toBase58()) {
-          const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: Buffer.from(ix.data)});
+          try {
+            const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: Buffer.from(ix.data)});
+            decoded.push({
+              programId,
+              accounts,
+              data: decodedIx ? plaintextFormatter(decodedIx) : null,
+            });  
+          } catch (error) {
+            if(this.enableLogs) 
+              console.error("Failed to decode token instruction", error);
+            decoded.push({
+              programId,
+              accounts,
+              data: bs58.encode(ix.data) || ix.data,
+            });
+          }
           
-          decoded.push({
-            programId,
-            accounts,
-            data: decodedIx ? plaintextFormatter(decodedIx) : "unknown",
-          });
           continue;
         }
         if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
@@ -261,7 +272,7 @@ export class Parser {
           decoded.push({
             programId,
             accounts,
-            data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+            data: decodedIx ? plaintextFormatter(decodedIx): null,
           });
           continue;
         }
@@ -272,7 +283,7 @@ export class Parser {
             decoded.push({
               programId,
               accounts,
-              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+              data: decodedIx ? plaintextFormatter(decodedIx): null,
             });
           } catch (error) {
             if(this.enableLogs)
@@ -294,7 +305,7 @@ export class Parser {
             decoded.push({
               programId,
               accounts,
-              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+              data: decodedIx ? plaintextFormatter(decodedIx): null,
             });  
           } catch (error) {
             if(this.enableLogs)
@@ -383,23 +394,34 @@ export class Parser {
           const superMap = buildAccountMetaMap(accountKeys, messageHeader, loadedAddresses);
           const keys = getInstructionAccountMetas(accounts, superMap);
           if(programId === TOKEN_PROGRAM_ID.toBase58()) {
-            const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: bs58.decode(ix.data)});
-            decoded.push({
-              outerIndex,
-              programId,
-              accounts,
-              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
-            });
+            try {
+              const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: bs58.decode(ix.data)});
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: decodedIx ? plaintextFormatter(decodedIx): null,
+              });  
+            } catch (error) {
+              if(this.enableLogs)
+                console.log(`Error decoding token instruction: ${ix.data}`);
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: ix.data
+              })
+            }
             continue;
           }
           if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
             const keys = getInstructionAccountMetas(accounts, superMap);
-            const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: bs58.decode(ix.data)});
+            const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: bs58.decode(ix.data)}, this.enableLogs);
             decoded.push({
               outerIndex,
               programId,
               accounts,
-              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+              data: decodedIx ? plaintextFormatter(decodedIx): null,
             });
             continue;
           }
@@ -411,7 +433,7 @@ export class Parser {
                 outerIndex,
                 programId,
                 accounts,
-                data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+                data: decodedIx ? plaintextFormatter(decodedIx): null,
               });
             } catch (error) {
               if(this.enableLogs)
@@ -434,7 +456,7 @@ export class Parser {
                 outerIndex,
                 programId,
                 accounts,
-                data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+                data: decodedIx ? plaintextFormatter(decodedIx): null,
               });  
             } catch (error) {
               if(this.enableLogs)
@@ -462,15 +484,46 @@ export class Parser {
           });
           continue;
         }
-        const coder = this.solanaDataParsers.get(programId)!.coder;
 
-        decoded.push({
-          outerIndex,
-          programId,
-          accounts,
-          data: plaintextFormatter(coder.instruction.decode(ix.data)),
-          stackHeight: ix.stackHeight,
-        });
+        const parser = this.solanaDataParsers.get(programId);
+        if(!parser) {
+          decoded.push({
+            outerIndex,
+            programId,
+            accounts,
+            data: ix.data,
+            stackHeight: ix.stackHeight,
+          });
+          continue;
+        }
+
+        const coder = parser.coder;
+        try {
+          let decodedIx;
+          if (parser.isCoral) {
+            decodedIx = coder.instruction.decode(ix.data);
+          } else {
+            decodedIx = coder.instruction.decode(ix.data, "base58");
+          }
+
+          decoded.push({
+            outerIndex,
+            programId,
+            accounts,
+            data: plaintextFormatter(decodedIx),
+            stackHeight: ix.stackHeight,
+          });  
+        } catch (error) {
+          if(this.enableLogs)
+            console.log(`Error decoding inner instruction by idl: ${ix.data} for program ${programId}`);
+          decoded.push({
+            outerIndex,
+            programId,
+            accounts,
+            data: ix.data,
+            stackHeight: ix.stackHeight,
+          });
+        }
       }
     }
 
@@ -580,7 +633,7 @@ export class Parser {
       tx.version === "legacy"?(tx.transaction.message as Message).accountKeys:tx.transaction.message.staticAccountKeys,
       tx.meta?.loadedAddresses
     );
-    const parsedEvents = this.parseEvents(tx, allKeys);
+    const parsedEvents = this.eventParsingEnabled ? this.parseEvents(tx, allKeys) : [];
 
     if (tx.version === "legacy") {
       const txMessage = tx.transaction.message as Message;
@@ -902,10 +955,14 @@ export class Parser {
 
   /**
    * Enables or disables logging for the parser. Enabled by default.
-   * When enabled, the parser will log parsed data to the console.
+   * When enabled, the parser will log errors to the console.
    * @param {boolean} enable - Whether to enable or disable logging.
    */
   enableLogging(enable: boolean) {
     this.enableLogs = enable;
+  }
+
+  enableEventParsing(enable: boolean) {
+    this.eventParsingEnabled = enable;
   }
 }

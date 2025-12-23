@@ -1,4 +1,4 @@
-import { PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { TransactionInstruction } from '@solana/web3.js';
 
 enum AssociatedTokenInstructionType {
     Create = 0,
@@ -21,8 +21,8 @@ export function decodeAssociatedTokenInstruction(instruction: TransactionInstruc
             return {
                 name: type === 0 ? "Create" : "CreateIdempotent",
                 accounts: {
-                    funder: instruction.keys[0]?.pubkey,
-                    ata: instruction.keys[1]?.pubkey,
+                    source: instruction.keys[0]?.pubkey,
+                    account: instruction.keys[1]?.pubkey,
                     wallet: instruction.keys[2]?.pubkey,
                     mint: instruction.keys[3]?.pubkey,
                     systemProgram: instruction.keys[4]?.pubkey,
@@ -41,8 +41,7 @@ export function decodeAssociatedTokenInstruction(instruction: TransactionInstruc
                     ownerMint: instruction.keys[4]?.pubkey,
                     wallet: instruction.keys[5]?.pubkey,
                     tokenProgram: instruction.keys[6]?.pubkey,
-                    // Required for consistency in the return type
-                    ata: instruction.keys[0]?.pubkey,
+                    account: instruction.keys[0]?.pubkey,
                 }
             };
 
