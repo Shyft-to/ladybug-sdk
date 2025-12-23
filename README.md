@@ -44,7 +44,7 @@ The SDK contains a default parser for
 - System Program (`11111111111111111111111111111111`), 
 - Token Program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) 
 - Token 2022 Program (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`) 
-- Associated Token Program (``)
+- Associated Token Program (`ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL`)
 
 and parsed instructions for these can be enabled using the `useDefaultInstructionParsing()` function. This is disabled by default (set to  `false`).
 
