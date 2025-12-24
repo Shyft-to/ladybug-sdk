@@ -22,6 +22,7 @@ export class TransactionStreamer {
   private idlInstructionNames: Set<string> = new Set();
   private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
   private autoReconnect: boolean = true;
+  private enableLogs: boolean = true;
 
   private fromSlot?: number;
   private lastReceivedSlot?: number;
@@ -78,7 +79,8 @@ export class TransactionStreamer {
   */
   onDetectInstruction(instructionName: string, callback: (tx: any) => void) {
     if (!this.idlInstructionNames.has(instructionName)) {
-      console.warn(`Instruction ${instructionName} not found in IDL`);
+      if(this.enableLogs)
+        console.warn(`Instruction ${instructionName} not found in IDL`);
       return;
     }
     this.onInstructionCallbacks[instructionName] = callback;
@@ -219,10 +221,12 @@ export class TransactionStreamer {
         await this.handleStream();
       } catch (error) {
         if (!this.autoReconnect) {
-          console.error("Stream error. Auto-reconnect disabled. Stopping...", error);
+          if(this.enableLogs)
+            console.error("Stream error. Auto-reconnect disabled. Stopping...", error);
           break;
         }
-        console.error("Stream error, retrying in 1s...", error);
+        if(this.enableLogs)
+          console.error("Stream error, retrying in 1s...", error);
         if (!this.running) break;
         await new Promise((res) => setTimeout(res, 1000));
       }
@@ -256,7 +260,8 @@ export class TransactionStreamer {
           msg.includes("last available");
 
         if (slotUnavailable) {
-          console.warn("⚠️ Slot unavailable:", msg);
+          if(this.enableLogs)
+            console.warn("⚠️ Slot unavailable:", msg);
 
           this.fromSlot = undefined;
           this.useLastSlotOnReconnect = false;
@@ -287,15 +292,16 @@ export class TransactionStreamer {
         if (data?.transaction?.slot !== undefined) {
           this.lastReceivedSlot = data.transaction.slot;
         }
+        if(data?.transaction) {
+          const tx = this.parser
+            ? this.parser.parseTransaction(
+              this.parser.formatGrpcTransactionData(data.transaction, Date.now())
+            )
+            : data;
 
-        const tx = this.parser
-          ? this.parser.parseTransaction(
-            this.parser.formatGrpcTransactionData(data.transaction, Date.now())
-          )
-          : data;
-
-        this.detectInstructionType(tx);
-        if (this.onDataCallback) this.onDataCallback(tx);
+          this.detectInstructionType(tx);
+          if (this.onDataCallback) this.onDataCallback(tx);
+        }
       } catch (err) {
         if (this.onErrorCallback) this.onErrorCallback(err);
       }
@@ -333,5 +339,14 @@ export class TransactionStreamer {
     } catch (err) {
       if (this.onErrorCallback) this.onErrorCallback(err);
     }
+  }
+
+  /**
+   * Enables or disables logging for the transaction streamer. Enabled by default.
+   * When enabled, the streamer will log errors to the console.
+   * @param {boolean} enable - Whether to enable or disable logging.
+   */
+  enableLogging(enable: boolean) {
+    this.enableLogs = enable;
   }
 }
