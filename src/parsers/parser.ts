@@ -44,11 +44,12 @@ import {
   ReadableLegacyTransactionResponse,
   ReadableV0TransactionResponse,
 } from "../types";
-import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { decodeTokenInstruction } from "./token-program-parser";
 import { SYSTEM_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/native/system";
 import { decodeSystemInstruction } from "./system-program-parser";
 import { decodeToken2022Instruction } from "./token-2022-parser";
+import { decodeAssociatedTokenInstruction } from "./associated-token-parser";
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 
 type AnyIdl = CoralIdl | SerumIdl;
@@ -92,6 +93,8 @@ export class Parser {
   private parseDefaultInstructions: boolean = false;
   // accountParsers: Map<string, ParserParams> = new Map();
   private instructionSet: Set<string> = new Set();
+  private enableLogs: boolean = true;
+  private eventParsingEnabled: boolean = true;
 
   /**
    * This parser uses the IDLs to parse the transaction and accounts data. A parser can take multiple IDLs.
@@ -241,37 +244,79 @@ export class Parser {
         const superMap = buildAccountMetaMap(accountKeys, messageHeader, loadedAddresses);
         const keys = getInstructionAccountMetas(accounts, superMap);
         if(programId === TOKEN_PROGRAM_ID.toBase58()) {
-          const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: Buffer.from(ix.data)});
+          try {
+            const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: Buffer.from(ix.data)});
+            decoded.push({
+              programId,
+              accounts,
+              data: decodedIx ? plaintextFormatter(decodedIx) : null,
+            });  
+          } catch (error) {
+            if(this.enableLogs) 
+              console.error("Failed to decode token instruction", error);
+            decoded.push({
+              programId,
+              accounts,
+              data: bs58.encode(ix.data) || ix.data,
+            });
+          }
           
-          decoded.push({
-            programId,
-            accounts,
-            data: decodedIx ? plaintextFormatter(decodedIx) : "unknown",
-          });
           continue;
         }
         if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
           const keys = getInstructionAccountMetas(accounts, superMap);
-          const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+          const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)}, this.enableLogs);
           // const acc = "keys" in decodedIx && Array.isArray(decodedIx.keys) && decodedIx.keys
           // ? decodedIx.keys.map((k) => k.pubkey.toBase58())
           // : accounts;
           decoded.push({
             programId,
             accounts,
-            data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+            data: decodedIx ? plaintextFormatter(decodedIx): null,
           });
+          continue;
+        }
+        if(programId === ASSOCIATED_TOKEN_PROGRAM_ID.toBase58()) {
+          const keys = getInstructionAccountMetas(accounts, superMap);
+          try {
+            const decodedIx = decodeAssociatedTokenInstruction({keys,programId: ASSOCIATED_TOKEN_PROGRAM_ID, data: Buffer.from(ix.data)});
+            decoded.push({
+              programId,
+              accounts,
+              data: decodedIx ? plaintextFormatter(decodedIx): null,
+            });
+          } catch (error) {
+            if(this.enableLogs)
+              console.log(`Error decoding associated token instruction: ${ix.data}`);
+            decoded.push({
+              programId,
+              accounts,
+              data: bs58.encode(ix.data) || ix.data
+            })
+          }
+          
           continue;
         }
         if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
           const keys = getInstructionAccountMetas(accounts, superMap);
-          const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: Buffer.from(ix.data)});
+          try {
+            const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: Buffer.from(ix.data)});
           
-          decoded.push({
-            programId,
-            accounts,
-            data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
-          });
+            decoded.push({
+              programId,
+              accounts,
+              data: decodedIx ? plaintextFormatter(decodedIx): null,
+            });  
+          } catch (error) {
+            if(this.enableLogs)
+              console.log(`Error decoding token 2022 instruction: ${ix.data}`);
+            decoded.push({
+              programId,
+              accounts,
+              data: bs58.encode(ix.data) || ix.data
+            })
+          }
+          
           continue;
         }
       }
@@ -286,23 +331,29 @@ export class Parser {
         continue;
       }
       const coder = this.solanaDataParsers.get(programId)!.coder;
-      let decodedInstruction;
       try {
-        decodedInstruction = plaintextFormatter(
-          coder.instruction.decode(Buffer.from(ix.data))
-        );
+        let decodedInstruction;
+        if (typeof ix.data === "string" || !ix.data) {
+          decodedInstruction = coder.instruction.decode(ix.data, "base58");
+        } else {
+          decodedInstruction = coder.instruction.decode(bs58.encode(ix.data),"base58");
+        }
+        decoded.push({
+          programId,
+          accounts,
+          data: plaintextFormatter(decodedInstruction),
+        });
       } catch (error) {
-        console.log(
-          `Error decoding instruction by idl: ${ix.data} for program ${programId}`
-        );
-        decodedInstruction = bs58.encode(ix.data) || ix.data;
+        if(this.enableLogs)
+          console.log(
+            `Error decoding instruction by idl: ${ix.data} for program ${programId}`
+          );
+        decoded.push({
+          programId,
+          accounts,
+          data: bs58.encode(ix.data) || ix.data,
+        });
       }
-
-      decoded.push({
-        programId,
-        accounts,
-        data: decodedInstruction,
-      });
     }
 
     return decoded;
@@ -348,35 +399,81 @@ export class Parser {
           const superMap = buildAccountMetaMap(accountKeys, messageHeader, loadedAddresses);
           const keys = getInstructionAccountMetas(accounts, superMap);
           if(programId === TOKEN_PROGRAM_ID.toBase58()) {
-            const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: bs58.decode(ix.data)});
-            decoded.push({
-              outerIndex,
-              programId,
-              accounts,
-              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
-            });
+            try {
+              const decodedIx = decodeTokenInstruction({keys,programId: TOKEN_PROGRAM_ID, data: bs58.decode(ix.data)});
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: decodedIx ? plaintextFormatter(decodedIx): null,
+              });  
+            } catch (error) {
+              if(this.enableLogs)
+                console.log(`Error decoding token instruction: ${ix.data}`);
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: ix.data
+              })
+            }
             continue;
           }
           if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
             const keys = getInstructionAccountMetas(accounts, superMap);
-            const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: bs58.decode(ix.data)});
+            const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: bs58.decode(ix.data)}, this.enableLogs);
             decoded.push({
               outerIndex,
               programId,
               accounts,
-              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
+              data: decodedIx ? plaintextFormatter(decodedIx): null,
             });
+            continue;
+          }
+          if(programId === ASSOCIATED_TOKEN_PROGRAM_ID.toBase58()) {
+            const keys = getInstructionAccountMetas(accounts, superMap);
+            try {
+              const decodedIx = decodeAssociatedTokenInstruction({keys,programId: ASSOCIATED_TOKEN_PROGRAM_ID, data: bs58.decode(ix.data)});
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: decodedIx ? plaintextFormatter(decodedIx): null,
+              });
+            } catch (error) {
+              if(this.enableLogs)
+                console.log(`Error decoding associated token instruction: ${ix.data}`);
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: ix.data
+              })
+            }
+            
             continue;
           }
           if(programId === TOKEN_2022_PROGRAM_ID.toBase58()) {
             const keys = getInstructionAccountMetas(accounts, superMap);
-            const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: bs58.decode(ix.data)});
-            decoded.push({
-              outerIndex,
-              programId,
-              accounts,
-              data: decodedIx ? plaintextFormatter(decodedIx): "unknown",
-            });
+            try {
+              const decodedIx = decodeToken2022Instruction({keys,programId: TOKEN_2022_PROGRAM_ID, data: bs58.decode(ix.data)});
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: decodedIx ? plaintextFormatter(decodedIx): null,
+              });  
+            } catch (error) {
+              if(this.enableLogs)
+                console.log(`Error decoding token 2022 instruction: ${ix.data}`);
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: ix.data
+              })
+            }
+            
             continue;
           }
         }
@@ -392,15 +489,47 @@ export class Parser {
           });
           continue;
         }
-        const coder = this.solanaDataParsers.get(programId)!.coder;
 
-        decoded.push({
-          outerIndex,
-          programId,
-          accounts,
-          data: plaintextFormatter(coder.instruction.decode(ix.data)),
-          stackHeight: ix.stackHeight,
-        });
+        const parser = this.solanaDataParsers.get(programId);
+        if(!parser) {
+          decoded.push({
+            outerIndex,
+            programId,
+            accounts,
+            data: ix.data,
+            stackHeight: ix.stackHeight,
+          });
+          continue;
+        }
+
+        const coder = parser.coder;
+        try {
+          let decodedIx;
+          
+          if (typeof ix.data === "string" || !ix.data) {
+            decodedIx = coder.instruction.decode(ix.data, "base58");
+          } else {
+            decodedIx = coder.instruction.decode(ix.data);
+          }
+
+          decoded.push({
+            outerIndex,
+            programId,
+            accounts,
+            data: plaintextFormatter(decodedIx),
+            stackHeight: ix.stackHeight,
+          });  
+        } catch (error) {
+          if(this.enableLogs)
+            console.log(`Error decoding inner instruction by idl: ${ix.data} for program ${programId}`);
+          decoded.push({
+            outerIndex,
+            programId,
+            accounts,
+            data: ix.data,
+            stackHeight: ix.stackHeight,
+          });
+        }
       }
     }
 
@@ -510,7 +639,7 @@ export class Parser {
       tx.version === "legacy"?(tx.transaction.message as Message).accountKeys:tx.transaction.message.staticAccountKeys,
       tx.meta?.loadedAddresses
     );
-    const parsedEvents = this.parseEvents(tx, allKeys);
+    const parsedEvents = this.eventParsingEnabled ? this.parseEvents(tx, allKeys) : [];
 
     if (tx.version === "legacy") {
       const txMessage = tx.transaction.message as Message;
@@ -641,7 +770,7 @@ export class Parser {
           }) => ({
             programIdIndex: programIdIndex,
             accountKeyIndexes: Array.from(accounts),
-            data: Uint8Array.from(Buffer.from(data || "", "base64")),
+            data: Buffer.from(data || "", "base64"),
           })
         ),
         addressTableLookups:
@@ -828,5 +957,18 @@ export class Parser {
       executable: geyserAcc.account.executable,
       rentEpoch: Number(geyserAcc.account.rentEpoch),
     };
+  }
+
+  /**
+   * Enables or disables logging for the parser. Enabled by default.
+   * When enabled, the parser will log errors to the console.
+   * @param {boolean} enable - Whether to enable or disable logging.
+   */
+  enableLogging(enable: boolean) {
+    this.enableLogs = enable;
+  }
+
+  enableEventParsing(enable: boolean) {
+    this.eventParsingEnabled = enable;
   }
 }

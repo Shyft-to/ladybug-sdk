@@ -14,6 +14,7 @@ export class AccountStreamer {
   private owners: Set<string> = new Set();
   private running: boolean = false;
   private stream?: any;
+  private enableLogs: boolean = true;
 
   private onDataCallback?: (data: any) => void;
   private onErrorCallback?: (err: any) => void;
@@ -212,10 +213,12 @@ export class AccountStreamer {
         await this.handleStream();
       } catch (error) {
         if (!this.autoReconnect) {
-          console.error("Stream error. Auto-reconnect disabled. Stopping...", error);
+          if(this.enableLogs)
+            console.error("Stream error. Auto-reconnect disabled. Stopping...", error);
           break;
         }
-        console.error("Stream error, retrying in 1s...", error);
+        if(this.enableLogs)
+          console.error("Stream error, retrying in 1s...", error);
         if (this.onErrorCallback) this.onErrorCallback(error);
         if (!this.running) break;
         await new Promise((res) => setTimeout(res, 1000));
@@ -251,7 +254,8 @@ export class AccountStreamer {
           msg.includes("last available");
 
         if (slotUnavailable) {
-          console.warn("⚠️ Slot unavailable:", msg);
+          if(this.enableLogs)
+            console.warn("⚠️ Slot unavailable:", msg);
 
           this.fromSlot = undefined;
           this.useLastSlotOnReconnect = false;
@@ -303,5 +307,14 @@ export class AccountStreamer {
     await this.pushUpdate();
     await streamClosed;
     this.stream = undefined;
+  }
+
+  /**
+   * Enables or disables logging for the account streamer. Enabled by default.
+   * When enabled, the streamer will log errors to the console.
+   * @param {boolean} enable - Whether to enable or disable logging.
+   */
+  enableLogging(enable: boolean) {
+    this.enableLogs = enable;
   }
 }

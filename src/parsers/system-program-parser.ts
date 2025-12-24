@@ -1,6 +1,6 @@
 import { TransactionInstruction, SystemInstruction, SystemProgram } from "@solana/web3.js";
 
-export function decodeSystemInstruction(instruction: TransactionInstruction) {
+export function decodeSystemInstruction(instruction: TransactionInstruction, showLogs: boolean = false) {
     
     try {
         const ixType = SystemInstruction.decodeInstructionType(instruction);
@@ -113,7 +113,8 @@ export function decodeSystemInstruction(instruction: TransactionInstruction) {
         }
         return decoded;
     } catch (error) {
-        console.log("Error Decoding System Instruction: ", error);
+        if(showLogs)
+            console.log("Error Decoding System Instruction: ", error);
         return {
             programId: SystemProgram.programId,
             name: "unknown",
