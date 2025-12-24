@@ -56,8 +56,11 @@ parser.addIDL(new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), clm
 parser.useDefaultInstructionParsing(true); // enables in-built parser for Token Program, Token 2022 and System Program
 ```
 
-### Turn off Error Logs
-We can enable or disable logs from the parser by passing `true` or `false` in the `enableLogging` function in the Parser class. This is enabled by default.
+### Managing Parser Logs
+By default, the `Parser` class provides logs to help you monitor internal processes and debugging information. However, for production environments or cleaner console outputs, you can easily toggle these logs.
+
+- **Toggle Logging:** Use the enableLogging(boolean) function to control output.
+- **Default State:** Logging is enabled by default. Use parser.enableLogging(false) to suppress logs.
 
 ```javascript
   const parser = new Parser();
@@ -66,12 +69,18 @@ We can enable or disable logs from the parser by passing `true` or `false` in th
 
   parser.useDefaultInstructionParsing(true);
   parser.enableLogging(false); //setting this to false will turn off logs
-  // parser.enableEventParsing(true);
 ```
 
 
 ### Toggle Event Parsing
-Since Events are parsed based on log messages, in certain cases when log messages are trimmed, we do not get parsed events properly. We can enable or disable **Event parsing** by passing `true` or `false` in the `enableEventParsing` function in the Parser class. This is enabled by default.
+In Solana, events are parsed directly from transaction log messages. In certain scenarios—such as when log messages are truncated or trimmed by the network—event parsing may become unreliable or unnecessary for your specific use case.
+
+You can manually control this behavior using the enableEventParsing(boolean) method:
+
+- **Default State:** Event parsing is enabled by default. If disabled, can be programatically enabled by using `parser.enableEventParsing(true)`.
+
+- **Disable Event Parsing:** use `parser.enableEventParsing(false)` to disable event parsing and reduce processing overhead if you only require instruction data.
+
 
 ```javascript
   const parser = new Parser();
@@ -300,9 +309,16 @@ async function processData(tx: any) {
 
 This streams all transactions which contains the `create_pool` instruction from Raydium CLMM. 
 
-### Streaming and parsing multiple dexes
+### Streaming and Parsing Multiple DEXs
 
-In certain cases, we have to stream data from multiple dexes all at once, and we need multiple dex specific parsers for that purpose. It can be achieved in the following manner.
+In complex monitoring scenarios, you may need to track activity across multiple programs simultaneously (e.g., comparing Pump.fun AMM activity against Meteora). Ladybug simplifies this by allowing you to register multiple IDLs to a single Parser instance.
+
+**How it Works: Multi-Program Streaming & Parsing**
+
+- Initialize a single `Parser` and register multiple program IDLs. This allows the parser to recognize and decode instructions from different programs (e.g., Meteora, Pump.fun, and Raydium) simultaneously.
+- By adding the `Parser` to the `TransactionStreamer` and providing an array of program addresses, the SDK automatically filters and decodes all incoming traffic from those specific DEXs through one connection.
+- Enable `useDefaultInstructionParsing()` to capture and decode instructions from standard Solana programs, ensuring you get data even for transactions that interact with the default programs.
+
 
 ```javascript
 import "dotenv/config";
@@ -547,6 +563,15 @@ async function runBasicCheck() {
 runBasicCheck().catch(console.error);
 ```
 
+## About Us
+
+We're here to provide a bridge between web2 & web3.
+
+## 🚀 Powered By
+
+[Shyft](https://shyft.to)
+
+Find out More: [Shyft Docs](https://docs.shyft.to) , [Shyft Blog](https://blogs.shyft.to) 
 
 
 
