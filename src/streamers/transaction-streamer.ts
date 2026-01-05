@@ -23,6 +23,7 @@ export class TransactionStreamer {
   private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
   private autoReconnect: boolean = true;
   private enableLogs: boolean = true;
+  private commitmentLevel: CommitmentLevel = CommitmentLevel.PROCESSED;
 
   private fromSlot?: number;
   private lastReceivedSlot?: number;
@@ -68,7 +69,7 @@ export class TransactionStreamer {
       blocksMeta: {},
       accountsDataSlice: [],
       ping: undefined,
-      commitment: CommitmentLevel.PROCESSED,
+      commitment: this.commitmentLevel
     };
   }
 
@@ -156,6 +157,7 @@ export class TransactionStreamer {
     this.request = {
       ...this.request,
       fromSlot: slotToUse ? slotToUse.toString() : undefined,
+      commitment: this.commitmentLevel,
       transactions: {
         tracked: {
           vote: false,
@@ -197,6 +199,25 @@ export class TransactionStreamer {
    */
   async removeAddresses(removeList: string[]) {
     removeList.forEach((addr) => this.addresses.delete(addr));
+    await this.pushUpdate();
+  }
+
+  /**
+   * Sets the commitment level to be used when streaming transactions.
+   * This can be either of the following values:
+   * "PROCESSED" will stream the data that was just processed by the node, and has the lowest latency.
+   * "CONFIRMED" will stream the data confirmed by a quorum, has more latency than "PROCESSED".
+   * "FINALIZED" will stream the data finalized by the cluster which is the most reliable. This has the highest latency.
+   * The default value is "PROCESSED".
+   * @param commitment The commitment level to use when streaming transactions.
+   */
+  async setCommitmentLevel(commitment: "PROCESSED"| "CONFIRMED" | "FINALIZED") {
+    if(commitment === "PROCESSED") 
+      this.commitmentLevel = CommitmentLevel.PROCESSED;
+    if(commitment === "CONFIRMED") 
+      this.commitmentLevel = CommitmentLevel.CONFIRMED;
+    if(commitment === "FINALIZED") 
+      this.commitmentLevel = CommitmentLevel.FINALIZED;
     await this.pushUpdate();
   }
 
@@ -261,7 +282,7 @@ export class TransactionStreamer {
 
         if (slotUnavailable) {
           if(this.enableLogs)
-            console.warn("⚠️ Slot unavailable:", msg);
+            console.warn("Slot unavailable:", msg);
 
           this.fromSlot = undefined;
           this.useLastSlotOnReconnect = false;

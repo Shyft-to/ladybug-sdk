@@ -15,6 +15,7 @@ export class AccountStreamer {
   private running: boolean = false;
   private stream?: any;
   private enableLogs: boolean = true;
+  private commitmentLevel: CommitmentLevel = CommitmentLevel.PROCESSED;
 
   private onDataCallback?: (data: any) => void;
   private onErrorCallback?: (err: any) => void;
@@ -61,7 +62,7 @@ export class AccountStreamer {
       blocksMeta: {},
       accountsDataSlice: [],
       ping: undefined,
-      commitment: CommitmentLevel.PROCESSED,
+      commitment: this.commitmentLevel,
     };
   }
 
@@ -134,6 +135,7 @@ export class AccountStreamer {
     
     this.request = {
       ...this.request,
+      commitment: this.commitmentLevel,
       fromSlot: slotToUse ? slotToUse.toString() : undefined,
       accounts: {
         program_name: {
@@ -193,6 +195,25 @@ export class AccountStreamer {
    */
   async removeOwners(removeList: string[]) {
     removeList.forEach((addr) => this.owners.delete(addr));
+    await this.pushUpdate();
+  }
+
+  /**
+   * Sets the commitment level to be used when streaming accounts.
+   * This can be either of the following values:
+   * "PROCESSED" will stream the data that was just processed by the node, and has the lowest latency.
+   * "CONFIRMED" will stream the data confirmed by a quorum, has more latency than "PROCESSED".
+   * "FINALIZED" will stream the data finalized by the cluster which is the most reliable. This has the highest latency.
+   * The default value is "PROCESSED".
+   * @param commitment The commitment level to use when streaming transactions.
+   */
+  async setCommitmentLevel(commitment: "PROCESSED"| "CONFIRMED" | "FINALIZED") {
+    if(commitment === "PROCESSED") 
+      this.commitmentLevel = CommitmentLevel.PROCESSED;
+    if(commitment === "CONFIRMED") 
+      this.commitmentLevel = CommitmentLevel.CONFIRMED;
+    if(commitment === "FINALIZED") 
+      this.commitmentLevel = CommitmentLevel.FINALIZED;
     await this.pushUpdate();
   }
 
