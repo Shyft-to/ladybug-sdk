@@ -481,6 +481,23 @@ const txnStreamer = new TransactionStreamer(
 
 Tip: `max_receive_message_length` determines the size of the message to be received, when you have a lot of addresses in your subscribe request, it is recommended to set this to a very high value.
 
+### Setting the Commitment Level
+You can also set the commitment level at which you want to stream data. This determines at what stage of the block confirmation process data is sent to your streamer. It can be processed, confirmed or finalized.
+
+- "PROCESSED" : Streams the data that was just processed by the node, and has the lowest latency.
+- "CONFIRMED" : Streams the data confirmed by a quorum, has more latency than "PROCESSED".
+- "FINALIZED" : Streams the data finalized by the cluster which is the most reliable. This has the highest latency.
+
+Commitment level can be set in the following manner. 
+
+```javascript
+const txnStreamer = new TransactionStreamer(process.env.ENDPOINT!, process.env.X_TOKEN);
+txnStreamer.addParser(parser); //adding the parser
+
+txnStreamer.setCommitmentLevel("CONFIRMED"); 
+/** setting the commitment level for which the data will be streamed. default is "PROCESSED", which is provides the lowest latency. It can also be set to "CONFIRMED" or "FINALIZED". **/ 
+```
+
 ### Enabling a Reconnect mechanism
 The _Ladybug SDK_ includes a robust, built-in reconnection mechanism that attempts to re-establish the stream connection within one second of disconnection.
 
