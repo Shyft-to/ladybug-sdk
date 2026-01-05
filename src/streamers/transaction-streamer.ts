@@ -23,6 +23,7 @@ export class TransactionStreamer {
   private onInstructionCallbacks: Record<string, (tx: any) => void> = {};
   private autoReconnect: boolean = true;
   private enableLogs: boolean = true;
+  private commitmentLevel: CommitmentLevel = CommitmentLevel.PROCESSED;
 
   private fromSlot?: number;
   private lastReceivedSlot?: number;
@@ -68,7 +69,7 @@ export class TransactionStreamer {
       blocksMeta: {},
       accountsDataSlice: [],
       ping: undefined,
-      commitment: CommitmentLevel.PROCESSED,
+      commitment: this.commitmentLevel
     };
   }
 
@@ -156,6 +157,7 @@ export class TransactionStreamer {
     this.request = {
       ...this.request,
       fromSlot: slotToUse ? slotToUse.toString() : undefined,
+      commitment: this.commitmentLevel,
       transactions: {
         tracked: {
           vote: false,
@@ -197,6 +199,16 @@ export class TransactionStreamer {
    */
   async removeAddresses(removeList: string[]) {
     removeList.forEach((addr) => this.addresses.delete(addr));
+    await this.pushUpdate();
+  }
+
+  async setCommitmentLevel(commitment: "PROCESSED"| "CONFIRMED" | "FINALIZED") {
+    if(commitment === "PROCESSED") 
+      this.commitmentLevel = CommitmentLevel.PROCESSED;
+    if(commitment === "CONFIRMED") 
+      this.commitmentLevel = CommitmentLevel.CONFIRMED;
+    if(commitment === "FINALIZED") 
+      this.commitmentLevel = CommitmentLevel.FINALIZED;
     await this.pushUpdate();
   }
 

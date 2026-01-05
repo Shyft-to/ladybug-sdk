@@ -15,6 +15,7 @@ export class AccountStreamer {
   private running: boolean = false;
   private stream?: any;
   private enableLogs: boolean = true;
+  private commitmentLevel: CommitmentLevel = CommitmentLevel.PROCESSED;
 
   private onDataCallback?: (data: any) => void;
   private onErrorCallback?: (err: any) => void;
@@ -61,7 +62,7 @@ export class AccountStreamer {
       blocksMeta: {},
       accountsDataSlice: [],
       ping: undefined,
-      commitment: CommitmentLevel.PROCESSED,
+      commitment: this.commitmentLevel,
     };
   }
 
@@ -134,6 +135,7 @@ export class AccountStreamer {
     
     this.request = {
       ...this.request,
+      commitment: this.commitmentLevel,
       fromSlot: slotToUse ? slotToUse.toString() : undefined,
       accounts: {
         program_name: {
@@ -193,6 +195,16 @@ export class AccountStreamer {
    */
   async removeOwners(removeList: string[]) {
     removeList.forEach((addr) => this.owners.delete(addr));
+    await this.pushUpdate();
+  }
+
+  async setCommitmentLevel(commitment: "PROCESSED"| "CONFIRMED" | "FINALIZED") {
+    if(commitment === "PROCESSED") 
+      this.commitmentLevel = CommitmentLevel.PROCESSED;
+    if(commitment === "CONFIRMED") 
+      this.commitmentLevel = CommitmentLevel.CONFIRMED;
+    if(commitment === "FINALIZED") 
+      this.commitmentLevel = CommitmentLevel.FINALIZED;
     await this.pushUpdate();
   }
 
