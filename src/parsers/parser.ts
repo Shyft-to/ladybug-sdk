@@ -265,15 +265,23 @@ export class Parser {
         }
         if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
           const keys = getInstructionAccountMetas(accounts, superMap);
-          const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)}, this.enableLogs);
-          // const acc = "keys" in decodedIx && Array.isArray(decodedIx.keys) && decodedIx.keys
-          // ? decodedIx.keys.map((k) => k.pubkey.toBase58())
-          // : accounts;
-          decoded.push({
-            programId,
-            accounts,
-            data: decodedIx ? plaintextFormatter(decodedIx): null,
-          });
+          try {
+            const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: Buffer.from(ix.data)});
+            decoded.push({
+              programId,
+              accounts,
+              data: decodedIx ? plaintextFormatter(decodedIx): null,
+            });  
+          } catch (error) {
+            if(this.enableLogs)
+              console.log(`Error decoding system instruction: ${ix.data}`);
+            decoded.push({
+              programId,
+              accounts,
+              data: bs58.encode(ix.data) || ix.data
+            })
+          }
+          
           continue;
         }
         if(programId === ASSOCIATED_TOKEN_PROGRAM_ID.toBase58()) {
@@ -421,13 +429,24 @@ export class Parser {
           }
           if(programId === SYSTEM_PROGRAM_ID.toBase58()) {
             const keys = getInstructionAccountMetas(accounts, superMap);
-            const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: bs58.decode(ix.data)}, this.enableLogs);
-            decoded.push({
-              outerIndex,
-              programId,
-              accounts,
-              data: decodedIx ? plaintextFormatter(decodedIx): null,
-            });
+            try {
+              const decodedIx = decodeSystemInstruction({keys,programId: SYSTEM_PROGRAM_ID, data: bs58.decode(ix.data)});
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: decodedIx ? plaintextFormatter(decodedIx): null,
+              });  
+            } catch (error) {
+              if(this.enableLogs)
+                console.log(`Error decoding system instruction: ${ix.data}`);
+              decoded.push({
+                outerIndex,
+                programId,
+                accounts,
+                data: ix.data
+              })
+            }
             continue;
           }
           if(programId === ASSOCIATED_TOKEN_PROGRAM_ID.toBase58()) {
@@ -808,7 +827,7 @@ export class Parser {
     const slot = data.slot;
     const version = rawTx.transaction.message.versioned ? 0 : "legacy";
 
-    const meta = this.formMeta(rawTx.meta);
+    const meta = this.formMeta(rawTx?.meta);
     const signatures = rawTx.transaction.signatures.map((s: Buffer) =>
       utils.bytes.bs58.encode(s)
     );
@@ -827,7 +846,9 @@ export class Parser {
     };
   }
 
-  private formMeta(meta: any): ConfirmedTransactionMeta {
+  private formMeta(meta: any): ConfirmedTransactionMeta | null {
+    if(!meta) 
+      return null
     return {
       err: meta.errorInfo ? { err: meta.errorInfo } : null,
       fee: meta.fee,
