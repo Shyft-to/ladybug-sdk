@@ -1,5 +1,5 @@
 import { getU8Codec } from "@solana/codecs";
-import { getArrayCodec, getBytesCodec, getStructCodec, getTupleCodec, getUnitCodec, getDataEnumCodec, getBooleanCodec } from "@solana/codecs-data-structures";
+import { getArrayCodec, getBytesCodec, getStructCodec, getTupleCodec, getUnitCodec, getDiscriminatedUnionCodec, getBooleanCodec } from "@solana/codecs-data-structures";
 import { getOptionCodec, getU64Codec } from "@solana/codecs";
 import { getUtf8Codec } from "@solana/codecs-strings";
 
@@ -46,7 +46,7 @@ const getFieldCodec = () =>
 
 export const updateMetadataLayout = getStructCodec([
 	["instruction", getBytesCodec()],
-	["field", getDataEnumCodec(getFieldCodec())],
+	["field", getDiscriminatedUnionCodec(getFieldCodec())],
 	["value", getUtf8Codec()],
 ]);
 
