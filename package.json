@@ -1,6 +1,6 @@
 {
   "name": "@shyft-to/ladybug-sdk",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "The ultimate toolkit for Yellowstone gRPC streaming and parsing",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -40,6 +40,9 @@
     "@triton-one/yellowstone-grpc": "^4.0.2",
     "bn.js": "^5.2.2",
     "lodash": "^4.17.21"
+  },
+  "peerDependencies": {
+    "@solana/codecs-data-structures": "2.0.0-rc.1"
   },
   "private": false,
   "publishConfig": {
