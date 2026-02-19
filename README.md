@@ -1,4 +1,4 @@
-# 🐞 ladybug-sdk: The ultimate toolkit for Yellowstone gRPC streaming and parsing
+# 🐞 ladybug-sdk: Parsing Yellowstone gRPC transaction and accounts with ease.
 Build your trading strategies faster and easily with the ultimate Solana sdk for Yellowstone gRPC streaming and parsing. Stop recreating the parsing wheel and focus on improving your trading strategies.
 
 ## ✨ Features
