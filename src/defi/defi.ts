@@ -1,8 +1,15 @@
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 
 import { getRawAccountsByMintOffsets } from "./gpa";
-import { DEFAULT_DEX_OFFSETS } from "./constants";
-import { RawDexPools } from "./types";
+import { DEFAULT_DEX_OFFSETS, RAYDIUM_AMM_V4_PROGRAM_ID } from "./constants";
+import { decodeLiquidityStateV4 } from "./decoders/raydium-liquidity-state-v4";
+import {
+  DecodedDexPools,
+  DecodedPoolAccount,
+  RawDexPools,
+  RawPoolAccount,
+} from "./types";
+import { Parser } from "../parsers/parser";
 
 /**
  * Discovers on-chain liquidity pools across Solana DEXes by querying
@@ -25,6 +32,8 @@ import { RawDexPools } from "./types";
 export class Defi {
   private connection: Connection;
   private enableLogs: boolean = true;
+  private parser?: Parser;
+
 
   /**
    * @param connection - A Solana `Connection`, or an RPC endpoint URL from
@@ -34,6 +43,21 @@ export class Defi {
   constructor(connection: Connection | string) {
     this.connection =
       typeof connection === "string" ? new Connection(connection) : connection;
+  }
+
+  /**
+   * Attaches a {@link Parser} used by the decoded fetch methods
+   * ({@link getDecodedPoolByTokenPair}, {@link getDecodedPoolsForToken}).
+   * Pools owned by a program whose IDL is registered on the parser are decoded
+   * via that IDL; pools with no registered IDL (and no built-in static decoder)
+   * are returned raw.
+   *
+   * @param parser - A `Parser` with the DEX IDLs you want decoded already added.
+   * @returns `this`, for chaining.
+   */
+  addParser(parser: Parser): this {
+    this.parser = parser;
+    return this;
   }
 
   /**
@@ -62,6 +86,100 @@ export class Defi {
    */
   async getPoolsForToken(mint: string): Promise<RawDexPools[]> {
     return this.fetchAcrossDexes(mint);
+  }
+
+  /**
+   * Like {@link getPoolByTokenPair}, but decodes each pool account. Requires a
+   * parser attached via {@link addParser} for IDL-based decoding. Raydium AMM V4
+   * is always decoded via its built-in static struct; programs with no
+   * registered IDL are returned raw.
+   *
+   * @param baseMint - One mint of the pair.
+   * @param quoteMint - The other mint of the pair.
+   * @returns One entry per known DEX, each with its decoded pool accounts.
+   */
+  async getDecodedPoolByTokenPair(
+    baseMint: string,
+    quoteMint: string,
+  ): Promise<DecodedDexPools[]> {
+    const raw = await this.fetchAcrossDexes(baseMint, quoteMint);
+    return raw.map((dex) => this.decodeDexPools(dex));
+  }
+
+  /**
+   * Like {@link getPoolsForToken}, but decodes each pool account. Requires a
+   * parser attached via {@link addParser} for IDL-based decoding. Raydium AMM V4
+   * is always decoded via its built-in static struct; programs with no
+   * registered IDL are returned raw.
+   *
+   * @param mint - The token mint to search for.
+   * @returns One entry per known DEX, each with its decoded pool accounts.
+   */
+  async getDecodedPoolsForToken(mint: string): Promise<DecodedDexPools[]> {
+    const raw = await this.fetchAcrossDexes(mint);
+    return raw.map((dex) => this.decodeDexPools(dex));
+  }
+
+  /**
+   * Decodes a single DEX's raw pools, routing each account by owning program:
+   * Raydium AMM V4 → static struct; a program whose IDL is registered on the
+   * attached parser → IDL decode; anything else → raw base64. Failures fall
+   * back to raw rather than throwing.
+   */
+  private decodeDexPools(dex: RawDexPools): DecodedDexPools {
+    const isRaydium = dex.programId === RAYDIUM_AMM_V4_PROGRAM_ID;
+    const hasIdl = this.parser?.hasParser(dex.programId) ?? false;
+
+    const pools = dex.pools.map((pool): DecodedPoolAccount =>
+      this.decodePool(pool, isRaydium, hasIdl),
+    );
+
+    return { name: dex.name, programId: dex.programId, pools };
+  }
+
+  /** Decodes one raw pool account, falling back to raw on any failure. */
+  private decodePool(
+    pool: RawPoolAccount,
+    isRaydium: boolean,
+    hasIdl: boolean,
+  ): DecodedPoolAccount {
+    const base = {
+      pubkey: pool.pubkey,
+      owner: pool.owner,
+      lamports: pool.lamports,
+      dataLength: pool.dataLength,
+    };
+
+    if (isRaydium) {
+      try {
+        const buffer = Buffer.from(pool.dataBase64, "base64");
+        return { ...base, decodedBy: "static", data: decodeLiquidityStateV4(buffer) };
+      } catch (error) {
+        if (this.enableLogs)
+          console.error(`Failed to decode Raydium pool ${pool.pubkey}`, error);
+        return { ...base, decodedBy: "raw", data: pool.dataBase64 };
+      }
+    }
+
+    if (this.parser && hasIdl) {
+      try {
+        const parsed = this.parser.parseAccount({
+          slot: 0,
+          pubkey: new PublicKey(pool.pubkey),
+          owner: new PublicKey(pool.owner),
+          lamports: pool.lamports,
+          data: Buffer.from(pool.dataBase64, "base64"),
+          executable: false,
+        });
+        return { ...base, decodedBy: "idl", data: parsed.parsed };
+      } catch (error) {
+        if (this.enableLogs)
+          console.error(`Failed to decode pool ${pool.pubkey}`, error);
+        return { ...base, decodedBy: "raw", data: pool.dataBase64 };
+      }
+    }
+
+    return { ...base, decodedBy: "raw", data: pool.dataBase64 };
   }
 
   /**

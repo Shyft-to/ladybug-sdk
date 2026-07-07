@@ -1,5 +1,5 @@
 export * from "./defi";
-export * from "./gpa";
+// export * from "./gpa";
 export * from "./types";
 export * from "./constants";
 export * from "./filters";
