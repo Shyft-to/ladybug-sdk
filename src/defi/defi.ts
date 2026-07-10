@@ -6,9 +6,13 @@ import { decodeLiquidityStateV4 } from "./decoders/raydium-liquidity-state-v4";
 import {
   DecodedDexPools,
   DecodedPoolAccount,
+  LiquidityDetailsResult,
+  LiquidityToken,
+  PoolByAddressResult,
   RawDexPools,
   RawPoolAccount,
 } from "./types";
+import { getToken, getTokenAccountAmount } from "./utils/token-metadata";
 import { Parser } from "../parsers/parser";
 
 /**
@@ -118,6 +122,206 @@ export class Defi {
   async getDecodedPoolsForToken(mint: string): Promise<DecodedDexPools[]> {
     const raw = await this.fetchAcrossDexes(mint);
     return raw.map((dex) => this.decodeDexPools(dex));
+  }
+
+  /**
+   * Fetches a single pool account by its address, resolves the owning DEX from
+   * the account's owner, and decodes it. Raydium AMM V4 is decoded via its
+   * built-in static struct; other programs need their IDL registered on a
+   * parser attached via {@link addParser}.
+   *
+   * @param address - The pool account address.
+   * @returns A `{ success, message, result? }` envelope; `result` (with `dex`,
+   * `programId`, and decoded `poolInfo`) is present only on success.
+   */
+  async getPoolsByAddress(address: string): Promise<PoolByAddressResult> {
+    const resolved = await this.decodeAccountByAddress(address);
+    if (!resolved.ok) {
+      return { success: false, message: resolved.message };
+    }
+
+    return {
+      success: true,
+      message: "Pool fetched successfully",
+      result: {
+        dex: DEFAULT_DEX_OFFSETS[resolved.programId]?.name ?? "unknown",
+        programId: resolved.programId,
+        poolInfo: resolved.decoded.data,
+      },
+    };
+  }
+
+  /**
+   * Fetches a pool by address, decodes it, resolves the two token mints and
+   * reserve vaults (whose field names differ per DEX, see `DEFAULT_DEX_OFFSETS`),
+   * and builds the liquidity pair: on-chain token details (decimals + Metaplex
+   * metadata) plus the pooled `amount` for each side. Requires the owning
+   * program to be decodable — Raydium AMM V4 via its static struct, others via
+   * an IDL registered on a parser attached with {@link addParser}.
+   *
+   * @param address - The pool account address.
+   * @returns A `{ success, message, result? }` envelope; `result` (with
+   * `address`, `dex`, `programId`, and `liquidity.tokenA`/`tokenB`) is present
+   * only on success.
+   */
+  async getLiquidityDetails(address: string): Promise<LiquidityDetailsResult> {
+    const resolved = await this.decodeAccountByAddress(address);
+    if (!resolved.ok) {
+      return { success: false, message: resolved.message };
+    }
+
+    const def = DEFAULT_DEX_OFFSETS[resolved.programId];
+    if (!def) {
+      return {
+        success: false,
+        message: `Unknown DEX for program ${resolved.programId}`,
+      };
+    }
+
+    const fields = this.extractParsedFields(resolved.decoded);
+
+    const mintA = fields[def.mintFieldA];
+    const mintB = fields[def.mintFieldB];
+    if (typeof mintA !== "string" || typeof mintB !== "string") {
+      return {
+        success: false,
+        message: `Could not resolve token mints for pool ${address}`,
+      };
+    }
+
+    const vaultA =
+      def.vaultFieldA && typeof fields[def.vaultFieldA] === "string"
+        ? (fields[def.vaultFieldA] as string)
+        : undefined;
+    const vaultB =
+      def.vaultFieldB && typeof fields[def.vaultFieldB] === "string"
+        ? (fields[def.vaultFieldB] as string)
+        : undefined;
+
+    try {
+      const [tokenA, tokenB] = await Promise.all([
+        this.buildLiquidityToken(mintA, vaultA),
+        this.buildLiquidityToken(mintB, vaultB),
+      ]);
+
+      return {
+        success: true,
+        message: "Liquidity fetched successfully",
+        result: {
+          address,
+          dex: def.name,
+          programId: resolved.programId,
+          liquidity: { tokenA, tokenB },
+        },
+      };
+    } catch (error) {
+      if (this.enableLogs)
+        console.error(`Failed to fetch token details for pool ${address}`, error);
+      return {
+        success: false,
+        message: `Failed to fetch token details for pool ${address}`,
+      };
+    }
+  }
+
+  /**
+   * Builds one side of a liquidity pair: token metadata + decimals for `mint`,
+   * plus the pooled `amount` read from `vault` (null when no vault is known or
+   * its balance can't be read).
+   */
+  private async buildLiquidityToken(
+    mint: string,
+    vault: string | undefined,
+  ): Promise<LiquidityToken> {
+
+    console.log("Mint: ", mint);
+    console.log("Vault: ", vault);
+
+    const [token, amount] = await Promise.all([
+      getToken(this.connection, mint),
+      vault ? getTokenAccountAmount(this.connection, vault) : Promise.resolve(null), //calls token account 
+    ]);
+
+    return {
+      address: token.address,
+      name: token.name,
+      symbol: token.symbol,
+      decimals: token.decimals,
+      imageUri: token.logoURI,
+      amount,
+    };
+  }
+
+  /**
+   * Shared lookup for the by-address methods: validates the address, fetches the
+   * account, resolves the owning program, and decodes it (Raydium static struct,
+   * or the attached parser's IDL). Returns a discriminated result rather than
+   * throwing.
+   */
+  private async decodeAccountByAddress(
+    address: string,
+  ): Promise<
+    | { ok: false; message: string }
+    | { ok: true; programId: string; decoded: DecodedPoolAccount }
+  > {
+    let pubkey: PublicKey;
+    try {
+      pubkey = new PublicKey(address);
+    } catch {
+      return { ok: false, message: `Invalid address: ${address}` };
+    }
+
+    try {
+      const info = await this.connection.getAccountInfo(pubkey);
+      if (!info) {
+        return { ok: false, message: `No account found for ${address}` };
+      }
+
+      const programId = info.owner.toBase58();
+      const isRaydium = programId === RAYDIUM_AMM_V4_PROGRAM_ID;
+      const hasIdl = this.parser?.hasParser(programId) ?? false;
+
+      if (!isRaydium && !hasIdl) {
+        return {
+          ok: false,
+          message: `No parser available for program ${programId}`,
+        };
+      }
+
+      const raw: RawPoolAccount = {
+        pubkey: address,
+        owner: programId,
+        lamports: info.lamports,
+        dataLength: info.data.length,
+        dataBase64: info.data.toString("base64"),
+      };
+      const decoded = this.decodePool(raw, isRaydium, hasIdl);
+
+      if (decoded.decodedBy === "raw") {
+        return { ok: false, message: `Failed to decode pool ${address}` };
+      }
+
+      return { ok: true, programId, decoded };
+    } catch (error) {
+      if (this.enableLogs)
+        console.error(`Failed to fetch pool ${address}`, error);
+      return { ok: false, message: `Failed to fetch pool ${address}` };
+    }
+  }
+
+  /**
+   * Returns the flat decoded field map for a pool, unwrapping the
+   * `{ accountName, parsed }` shape produced by the IDL path so callers can read
+   * fields uniformly across IDL- and static-decoded pools.
+   */
+  private extractParsedFields(
+    decoded: DecodedPoolAccount,
+  ): Record<string, unknown> {
+    if (decoded.decodedBy === "idl") {
+      const data = decoded.data as { parsed?: Record<string, unknown> };
+      return data.parsed ?? {};
+    }
+    return decoded.data as Record<string, unknown>;
   }
 
   /**

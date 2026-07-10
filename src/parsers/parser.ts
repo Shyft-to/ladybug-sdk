@@ -193,6 +193,17 @@ export class Parser {
   }
 
   /**
+   * Checks whether an IDL has been registered for the given program, i.e.
+   * whether {@link parseAccount} can decode accounts owned by it.
+   * @param programId - The program id to check, as a base58 string or PublicKey.
+   * @returns True if an IDL is registered for the program, false otherwise.
+   */
+  public hasParser(programId: string | PublicKey): boolean {
+    const key = typeof programId === "string" ? programId : programId.toBase58();
+    return this.solanaDataParsers.has(key);
+  }
+
+  /**
    * Retrieves the account keys from a transaction message and its associated transaction meta data.
    * The returned array will contain the static account keys from the message, as well as the loaded addresses from the meta data.
    * The loaded addresses are split into two categories: writable and readonly.

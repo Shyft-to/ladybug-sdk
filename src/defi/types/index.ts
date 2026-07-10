@@ -1,3 +1,7 @@
+import { TokenInfo } from "../utils/token-metadata";
+
+export type { TokenInfo };
+
 /**
  * A single Solana `getProgramAccounts` memcmp filter.
  * Matches accounts whose bytes at `offset` equal the base58-encoded `bytes`.
@@ -64,4 +68,64 @@ export interface DecodedDexPools {
   programId: string;
   /** The matching pool accounts, decoded where possible. */
   pools: DecodedPoolAccount[];
+}
+
+/** One side of a pool's liquidity pair: token metadata plus the pooled amount. */
+export interface LiquidityToken {
+  /** The token mint address. */
+  address: string;
+  /** Token name from Metaplex metadata, or "Unknown Token" if unavailable. */
+  name: string;
+  /** Token symbol from Metaplex metadata, or "UNKNOWN" if unavailable. */
+  symbol: string;
+  /** Mint decimals. */
+  decimals: number;
+  /** Metadata image/URI, or "" if unavailable. */
+  imageUri: string;
+  /**
+   * Raw token amount (in base units) held in the pool's vault, or `null` when
+   * the vault balance can't be read (e.g. Meteora DAMM V1 vault-program accounts).
+   */
+  amount: number | null;
+}
+
+/** Result of looking up a pool's liquidity pair and token details by address. */
+export interface LiquidityDetailsResult {
+  /** Whether the pool and its token details were resolved. */
+  success: boolean;
+  /** Human-readable status message. */
+  message: string;
+  /** Present only when `success` is true. */
+  result?: {
+    /** The pool account address. */
+    address: string;
+    /** The DEX this pool belongs to (e.g. "orcaWhirlpool"). */
+    dex: string;
+    /** The on-chain program that owns the pool account. */
+    programId: string;
+    /** The two sides of the pool's liquidity pair. */
+    liquidity: {
+      /** The first token in the pair. */
+      tokenA: LiquidityToken;
+      /** The second token in the pair. */
+      tokenB: LiquidityToken;
+    };
+  };
+}
+
+/** Result of looking up and decoding a single pool by its account address. */
+export interface PoolByAddressResult {
+  /** Whether the pool was found and decoded. */
+  success: boolean;
+  /** Human-readable status message. */
+  message: string;
+  /** Present only when `success` is true. */
+  result?: {
+    /** The DEX this pool belongs to (e.g. "orcaWhirlpool"). */
+    dex: string;
+    /** The on-chain program that owns the pool account. */
+    programId: string;
+    /** The decoded pool state. */
+    poolInfo: unknown;
+  };
 }

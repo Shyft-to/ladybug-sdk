@@ -37,11 +37,28 @@ export interface DexOffsetDefaults {
   offsetB: number;
   /** IDL account struct to decode. Absent for hand-decoded DEXes (e.g. Raydium). */
   accountName?: string;
+  /**
+   * Field name of the first token mint in the *decoded* pool account. This
+   * differs per DEX (e.g. `token_mint_a` for Orca, `baseMint` for Raydium),
+   * so it's recorded here to locate the mints after decoding.
+   */
+  mintFieldA: string;
+  /** Field name of the second token mint in the decoded pool account. */
+  mintFieldB: string;
+  /**
+   * Field name of the first token's vault (the SPL token account holding the
+   * reserve) in the decoded pool account, used to read the pooled `amount`.
+   * Absent for DEXes whose vaults aren't plain token accounts (e.g. Meteora
+   * DAMM V1, which uses Mercurial vault-program accounts).
+   */
+  vaultFieldA?: string;
+  /** Field name of the second token's vault in the decoded pool account. */
+  vaultFieldB?: string;
 }
 
 /**
  * Built-in defaults keyed by program id. When you register a known program via
- * {@link PoolFetcher.addIDL} / {@link PoolFetcher.addDecoder} without offsets,
+ * {@link Defi.addIDL} / {@link Defi.addDecoder} without offsets,
  * these "accelerated" defaults are used automatically.
  */
 export const DEFAULT_DEX_OFFSETS: Record<string, DexOffsetDefaults> = {
@@ -49,23 +66,39 @@ export const DEFAULT_DEX_OFFSETS: Record<string, DexOffsetDefaults> = {
     name: "raydiumAmm",
     offsetA: RAYDIUM_AMM_V4_BASE_MINT_OFFSET,
     offsetB: RAYDIUM_AMM_V4_QUOTE_MINT_OFFSET,
+    mintFieldA: "baseMint",
+    mintFieldB: "quoteMint",
+    vaultFieldA: "baseVault",
+    vaultFieldB: "quoteVault",
   },
   [METEORA_DLMM_PROGRAM_ID]: {
     name: "meteoraDlmm",
     offsetA: METEORA_DLMM_TOKEN_X_MINT_OFFSET,
     offsetB: METEORA_DLMM_TOKEN_Y_MINT_OFFSET,
     accountName: "LbPair",
+    mintFieldA: "token_x_mint",
+    mintFieldB: "token_y_mint",
+    vaultFieldA: "reserve_x",
+    vaultFieldB: "reserve_y",
   },
   [METEORA_DAMM_V1_PROGRAM_ID]: {
     name: "meteoraDammV1",
     offsetA: METEORA_DAMM_V1_TOKEN_A_MINT_OFFSET,
     offsetB: METEORA_DAMM_V1_TOKEN_B_MINT_OFFSET,
     accountName: "Pool",
+    mintFieldA: "tokenAMint",
+    mintFieldB: "tokenBMint",
+    // aVault/bVault are Mercurial vault-program accounts, not token accounts,
+    // so the pooled amount isn't a simple token-account balance here.
   },
   [ORCA_WHIRLPOOL_PROGRAM_ID]: {
     name: "orcaWhirlpool",
     offsetA: ORCA_WHIRLPOOL_TOKEN_A_MINT_OFFSET,
     offsetB: ORCA_WHIRLPOOL_TOKEN_B_MINT_OFFSET,
     accountName: "Whirlpool",
+    mintFieldA: "token_mint_a",
+    mintFieldB: "token_mint_b",
+    vaultFieldA: "token_vault_a",
+    vaultFieldB: "token_vault_b",
   },
 };
