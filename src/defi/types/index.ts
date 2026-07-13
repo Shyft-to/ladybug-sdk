@@ -70,18 +70,16 @@ export interface DecodedDexPools {
   pools: DecodedPoolAccount[];
 }
 
-/** One side of a pool's liquidity pair: token metadata plus the pooled amount. */
-export interface LiquidityToken {
+/**
+ * One side of a pool's liquidity pair without Metaplex metadata — just the
+ * mint, its decimals, and the pooled amount. Returned when `getLiquidityDetails`
+ * is called with `{ includeMetadata: false }`.
+ */
+export interface LiquidityAmount {
   /** The token mint address. */
   address: string;
-  /** Token name from Metaplex metadata, or "Unknown Token" if unavailable. */
-  name: string;
-  /** Token symbol from Metaplex metadata, or "UNKNOWN" if unavailable. */
-  symbol: string;
-  /** Mint decimals. */
+  /** Mint decimals (from the SPL mint account). */
   decimals: number;
-  /** Metadata image/URI, or "" if unavailable. */
-  imageUri: string;
   /**
    * Raw token amount (in base units) held in the pool's vault, or `null` when
    * the vault balance can't be read (e.g. Meteora DAMM V1 vault-program accounts).
@@ -89,8 +87,35 @@ export interface LiquidityToken {
   amount: number | null;
 }
 
-/** Result of looking up a pool's liquidity pair and token details by address. */
-export interface LiquidityDetailsResult {
+/**
+ * One side of a pool's liquidity pair including Metaplex metadata. Returned by
+ * `getLiquidityDetails` by default (`includeMetadata: true`).
+ */
+export interface LiquidityToken extends LiquidityAmount {
+  /** Token name from Metaplex metadata, or "Unknown Token" if unavailable. */
+  name: string;
+  /** Token symbol from Metaplex metadata, or "UNKNOWN" if unavailable. */
+  symbol: string;
+  /** Metadata image/URI, or "" if unavailable. */
+  imageUri: string;
+}
+
+/** Options for {@link Defi.getLiquidityDetails}. */
+export interface GetLiquidityDetailsOptions {
+  /**
+   * Whether to fetch Metaplex metadata (name/symbol/imageUri) for each token.
+   * When `false`, only `address`, `decimals`, and `amount` are returned, saving
+   * a metadata RPC per token. Defaults to `true`.
+   */
+  includeMetadata?: boolean;
+}
+
+/**
+ * Result of looking up a pool's liquidity pair and token details by address.
+ * `T` is the per-token shape: {@link LiquidityToken} with metadata (default) or
+ * {@link LiquidityAmount} without it.
+ */
+export interface LiquidityDetailsResult<T = LiquidityToken> {
   /** Whether the pool and its token details were resolved. */
   success: boolean;
   /** Human-readable status message. */
@@ -106,9 +131,9 @@ export interface LiquidityDetailsResult {
     /** The two sides of the pool's liquidity pair. */
     liquidity: {
       /** The first token in the pair. */
-      tokenA: LiquidityToken;
+      tokenA: T;
       /** The second token in the pair. */
-      tokenB: LiquidityToken;
+      tokenB: T;
     };
   };
 }

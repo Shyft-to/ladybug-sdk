@@ -42,7 +42,7 @@ function findMetadataPda(mint: PublicKey): PublicKey {
  * SPL Mint layout: mintAuthorityOption(4) + mintAuthority(32) + supply(8) = 44,
  * so `decimals` (u8) sits at byte offset 44.
  */
-async function getMintDecimals(
+export async function getMintDecimals(
   connection: Connection,
   mintPubkey: PublicKey,
 ): Promise<number> {

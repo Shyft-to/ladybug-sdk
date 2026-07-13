@@ -102,3 +102,18 @@ export const DEFAULT_DEX_OFFSETS: Record<string, DexOffsetDefaults> = {
     vaultFieldB: "token_vault_b",
   },
 };
+
+/**
+ * The friendly names of every DEX the SDK supports, in `DEFAULT_DEX_OFFSETS`
+ * order. Use these to filter lookups (e.g. `getPoolsForToken(mint, ["orcaWhirlpool"])`)
+ * and to validate/suggest names. Kept as a source of truth for {@link DexName}.
+ */
+export const SUPPORTED_DEX_NAMES = [
+  "raydiumAmm",
+  "meteoraDlmm",
+  "meteoraDammV1",
+  "orcaWhirlpool",
+] as const;
+
+/** A supported DEX name (see {@link SUPPORTED_DEX_NAMES}). */
+export type DexName = (typeof SUPPORTED_DEX_NAMES)[number];

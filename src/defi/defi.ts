@@ -1,18 +1,29 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 
 import { getRawAccountsByMintOffsets } from "./gpa";
-import { DEFAULT_DEX_OFFSETS, RAYDIUM_AMM_V4_PROGRAM_ID } from "./constants";
+import {
+  DEFAULT_DEX_OFFSETS,
+  DexName,
+  RAYDIUM_AMM_V4_PROGRAM_ID,
+  SUPPORTED_DEX_NAMES,
+} from "./constants";
 import { decodeLiquidityStateV4 } from "./decoders/raydium-liquidity-state-v4";
 import {
   DecodedDexPools,
   DecodedPoolAccount,
+  GetLiquidityDetailsOptions,
+  LiquidityAmount,
   LiquidityDetailsResult,
   LiquidityToken,
   PoolByAddressResult,
   RawDexPools,
   RawPoolAccount,
 } from "./types";
-import { getToken, getTokenAccountAmount } from "./utils/token-metadata";
+import {
+  getMintDecimals,
+  getToken,
+  getTokenAccountAmount,
+} from "./utils/token-metadata";
 import { Parser } from "../parsers/parser";
 
 /**
@@ -105,8 +116,14 @@ export class Defi {
   async getDecodedPoolByTokenPair(
     baseMint: string,
     quoteMint: string,
+    dex?: DexName[]
   ): Promise<DecodedDexPools[]> {
-    const raw = await this.fetchAcrossDexes(baseMint, quoteMint);
+    let raw;
+    if(dex) {
+      raw = await this.fetchAcrossADex(baseMint, quoteMint, dex);
+    } else {
+      raw = await this.fetchAcrossDexes(baseMint, quoteMint);
+    }
     return raw.map((dex) => this.decodeDexPools(dex));
   }
 
@@ -159,12 +176,32 @@ export class Defi {
    * program to be decodable — Raydium AMM V4 via its static struct, others via
    * an IDL registered on a parser attached with {@link addParser}.
    *
+   * By default each token includes Metaplex metadata (name/symbol/imageUri).
+   * Pass `{ includeMetadata: false }` to skip the metadata fetch and return only
+   * `address`, `decimals`, and `amount` per token.
+   *
    * @param address - The pool account address.
+   * @param options - See {@link GetLiquidityDetailsOptions}.
    * @returns A `{ success, message, result? }` envelope; `result` (with
    * `address`, `dex`, `programId`, and `liquidity.tokenA`/`tokenB`) is present
    * only on success.
    */
-  async getLiquidityDetails(address: string): Promise<LiquidityDetailsResult> {
+  async getLiquidityDetails(
+    address: string,
+  ): Promise<LiquidityDetailsResult<LiquidityToken>>;
+  async getLiquidityDetails(
+    address: string,
+    options: { includeMetadata: false },
+  ): Promise<LiquidityDetailsResult<LiquidityAmount>>;
+  async getLiquidityDetails(
+    address: string,
+    options?: GetLiquidityDetailsOptions,
+  ): Promise<LiquidityDetailsResult<LiquidityToken | LiquidityAmount>>;
+  async getLiquidityDetails(
+    address: string,
+    options?: GetLiquidityDetailsOptions,
+  ): Promise<LiquidityDetailsResult<LiquidityToken | LiquidityAmount>> {
+    const includeMetadata = options?.includeMetadata ?? true;
     const resolved = await this.decodeAccountByAddress(address);
     if (!resolved.ok) {
       return { success: false, message: resolved.message };
@@ -200,8 +237,8 @@ export class Defi {
 
     try {
       const [tokenA, tokenB] = await Promise.all([
-        this.buildLiquidityToken(mintA, vaultA),
-        this.buildLiquidityToken(mintB, vaultB),
+        this.buildLiquidityToken(mintA, vaultA, includeMetadata),
+        this.buildLiquidityToken(mintB, vaultB, includeMetadata),
       ]);
 
       return {
@@ -225,21 +262,31 @@ export class Defi {
   }
 
   /**
-   * Builds one side of a liquidity pair: token metadata + decimals for `mint`,
-   * plus the pooled `amount` read from `vault` (null when no vault is known or
-   * its balance can't be read).
+   * Builds one side of a liquidity pair. Always resolves `decimals` (from the
+   * SPL mint) and the pooled `amount` (from `vault`, null when no vault is known
+   * or its balance can't be read). When `includeMetadata` is true, also fetches
+   * Metaplex name/symbol/imageUri.
    */
   private async buildLiquidityToken(
     mint: string,
     vault: string | undefined,
-  ): Promise<LiquidityToken> {
+    includeMetadata: boolean,
+  ): Promise<LiquidityToken | LiquidityAmount> {
+    const amountPromise = vault
+      ? getTokenAccountAmount(this.connection, vault)
+      : Promise.resolve(null);
 
-    console.log("Mint: ", mint);
-    console.log("Vault: ", vault);
+    if (!includeMetadata) {
+      const [decimals, amount] = await Promise.all([
+        getMintDecimals(this.connection, new PublicKey(mint)),
+        amountPromise,
+      ]);
+      return { address: mint, decimals, amount };
+    }
 
     const [token, amount] = await Promise.all([
       getToken(this.connection, mint),
-      vault ? getTokenAccountAmount(this.connection, vault) : Promise.resolve(null), //calls token account 
+      amountPromise,
     ]);
 
     return {
@@ -399,6 +446,49 @@ export class Defi {
     const dexes = Object.entries(DEFAULT_DEX_OFFSETS);
     return Promise.all(
       dexes.map(async ([programId, def]): Promise<RawDexPools> => {
+        try {
+          const pools = await getRawAccountsByMintOffsets(
+            this.connection,
+            programId,
+            def.offsetA,
+            def.offsetB,
+            mintA,
+            mintB,
+          );
+          return { name: def.name, programId, pools };
+        } catch (error) {
+          if (this.enableLogs)
+            console.error(`Failed to fetch ${def.name} pools`, error);
+          return { name: def.name, programId, pools: [] };
+        }
+      }),
+    );
+  }
+
+  private async fetchAcrossADex(
+    mintA?: string,
+    mintB?: string,
+    dexes?: DexName[]
+  ): Promise<RawDexPools[]> {
+    const allDexes = Object.entries(DEFAULT_DEX_OFFSETS);
+
+    let includeDexes = allDexes;
+    if (dexes && dexes.length > 0) {
+      const invalid = dexes.filter(
+        (name) => !SUPPORTED_DEX_NAMES.includes(name),
+      );
+      if (invalid.length > 0) {
+        throw new Error(
+          `Unknown DEX name(s): ${invalid.join(", ")}. ` +
+            `Supported DEXes: ${SUPPORTED_DEX_NAMES.join(", ")}.`,
+        );
+      }
+      const wanted = new Set<string>(dexes);
+      includeDexes = allDexes.filter(([, def]) => wanted.has(def.name));
+    }
+
+    return Promise.all(
+      includeDexes.map(async ([programId, def]): Promise<RawDexPools> => {
         try {
           const pools = await getRawAccountsByMintOffsets(
             this.connection,
