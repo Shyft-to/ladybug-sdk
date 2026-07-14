@@ -62,7 +62,7 @@ export class Defi {
 
   /**
    * Attaches a {@link Parser} used by the decoded fetch methods
-   * ({@link getDecodedPoolByTokenPair}, {@link getDecodedPoolsForToken}).
+   * ({@link getPoolByTokenPair}, {@link getPoolsForToken}).
    * Pools owned by a program whose IDL is registered on the parser are decoded
    * via that IDL; pools with no registered IDL (and no built-in static decoder)
    * are returned raw.
@@ -75,45 +75,47 @@ export class Defi {
     return this;
   }
 
+  // /**
+  //  * Finds pools for a token pair across every DEX whose mint offsets the SDK
+  //  * knows (see `DEFAULT_DEX_OFFSETS`), returning the **raw, undecoded** account
+  //  * data. No layout decoding — decode the returned `dataBase64` yourself.
+  //  *
+  //  * @param baseMint - One mint of the pair.
+  //  * @param quoteMint - The other mint of the pair.
+  //  * @returns One entry per known DEX, each with its raw matching pool accounts.
+  //  */
+  // async getPoolByTokenPair(
+  //   baseMint: string,
+  //   quoteMint: string,
+  // ): Promise<RawDexPools[]> {
+  //   return this.fetchAcrossDexes(baseMint, quoteMint);
+  // }
+
+  // /**
+  //  * Finds every pool holding `mint` (in either mint slot) across every DEX
+  //  * whose mint offsets the SDK knows, returning the **raw, undecoded** account
+  //  * data.
+  //  *
+  //  * @param mint - The token mint to search for.
+  //  * @returns One entry per known DEX, each with its raw matching pool accounts.
+  //  */
+  // async getPoolsForToken(mint: string): Promise<RawDexPools[]> {
+  //   return this.fetchAcrossDexes(mint);
+  // }
+
   /**
    * Finds pools for a token pair across every DEX whose mint offsets the SDK
-   * knows (see `DEFAULT_DEX_OFFSETS`), returning the **raw, undecoded** account
-   * data. No layout decoding — decode the returned `dataBase64` yourself.
-   *
-   * @param baseMint - One mint of the pair.
-   * @param quoteMint - The other mint of the pair.
-   * @returns One entry per known DEX, each with its raw matching pool accounts.
-   */
-  async getPoolByTokenPair(
-    baseMint: string,
-    quoteMint: string,
-  ): Promise<RawDexPools[]> {
-    return this.fetchAcrossDexes(baseMint, quoteMint);
-  }
-
-  /**
-   * Finds every pool holding `mint` (in either mint slot) across every DEX
-   * whose mint offsets the SDK knows, returning the **raw, undecoded** account
-   * data.
-   *
-   * @param mint - The token mint to search for.
-   * @returns One entry per known DEX, each with its raw matching pool accounts.
-   */
-  async getPoolsForToken(mint: string): Promise<RawDexPools[]> {
-    return this.fetchAcrossDexes(mint);
-  }
-
-  /**
-   * Like {@link getPoolByTokenPair}, but decodes each pool account. Requires a
+   * knows (see `DEFAULT_DEX_OFFSETS`), decoding each pool account. Requires a
    * parser attached via {@link addParser} for IDL-based decoding. Raydium AMM V4
    * is always decoded via its built-in static struct; programs with no
    * registered IDL are returned raw.
    *
    * @param baseMint - One mint of the pair.
    * @param quoteMint - The other mint of the pair.
+   * @param dex - Optional subset of DEX names to search (see `SUPPORTED_DEX_NAMES`).
    * @returns One entry per known DEX, each with its decoded pool accounts.
    */
-  async getDecodedPoolByTokenPair(
+  async getPoolByTokenPair(
     baseMint: string,
     quoteMint: string,
     dex?: DexName[]
@@ -128,7 +130,8 @@ export class Defi {
   }
 
   /**
-   * Like {@link getPoolsForToken}, but decodes each pool account. Requires a
+   * Finds every pool holding `mint` (in either mint slot) across every DEX
+   * whose mint offsets the SDK knows, decoding each pool account. Requires a
    * parser attached via {@link addParser} for IDL-based decoding. Raydium AMM V4
    * is always decoded via its built-in static struct; programs with no
    * registered IDL are returned raw.
@@ -136,7 +139,7 @@ export class Defi {
    * @param mint - The token mint to search for.
    * @returns One entry per known DEX, each with its decoded pool accounts.
    */
-  async getDecodedPoolsForToken(mint: string): Promise<DecodedDexPools[]> {
+  async getPoolsForToken(mint: string): Promise<DecodedDexPools[]> {
     const raw = await this.fetchAcrossDexes(mint);
     return raw.map((dex) => this.decodeDexPools(dex));
   }

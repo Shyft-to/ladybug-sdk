@@ -25,6 +25,19 @@ export const ORCA_WHIRLPOOL_PROGRAM_ID = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3u
 export const ORCA_WHIRLPOOL_TOKEN_A_MINT_OFFSET = 101;
 export const ORCA_WHIRLPOOL_TOKEN_B_MINT_OFFSET = 181;
 
+export const RAYDIUM_CAMM_PROGRAM_ID = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
+export const RAYDIUM_CAMM_TOKEN_MINT_0_OFFSET = 73;
+export const RAYDIUM_CAMM_TOKEN_MINT_1_OFFSET = 105;
+
+export const RAYDIUM_CPMM_PROGRAM_ID = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C";
+export const RAYDIUM_CPMM_TOKEN_MINT_0_OFFSET = 168;
+export const RAYDIUM_CPMM_TOKEN_MINT_1_OFFSET = 200;
+
+export const PUMP_AMM_PROGRAM_ID = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA";
+export const PUMP_AMM_BASE_MINT_OFFSET = 43;
+export const PUMP_AMM_QUOTE_MINT_OFFSET = 75;
+
+
 // ─── Default offsets registry ───────────────────────────────────────────────
 
 /** The known mint offsets (and IDL account name) for a DEX program. */
@@ -101,6 +114,36 @@ export const DEFAULT_DEX_OFFSETS: Record<string, DexOffsetDefaults> = {
     vaultFieldA: "token_vault_a",
     vaultFieldB: "token_vault_b",
   },
+  [RAYDIUM_CAMM_PROGRAM_ID]: {
+    name: "raydiumCamm",
+    offsetA: RAYDIUM_CAMM_TOKEN_MINT_0_OFFSET,
+    offsetB: RAYDIUM_CAMM_TOKEN_MINT_1_OFFSET,
+    accountName: "PoolState",
+    mintFieldA: "tokenMint0",
+    mintFieldB: "tokenMint1",
+    vaultFieldA: "tokenVault0",
+    vaultFieldB: "tokenVault1",
+  },
+  [RAYDIUM_CPMM_PROGRAM_ID]: {
+    name: "raydiumCpmm",
+    offsetA: RAYDIUM_CPMM_TOKEN_MINT_0_OFFSET,
+    offsetB: RAYDIUM_CPMM_TOKEN_MINT_1_OFFSET,
+    accountName: "PoolState",
+    mintFieldA: "token0Mint",
+    mintFieldB: "token1Mint",
+    vaultFieldA: "token0Vault",
+    vaultFieldB: "token1Vault",
+  },
+  [PUMP_AMM_PROGRAM_ID]: {
+    name: "pumpAmm",
+    offsetA: PUMP_AMM_BASE_MINT_OFFSET,
+    offsetB: PUMP_AMM_QUOTE_MINT_OFFSET,
+    accountName: "Pool",
+    mintFieldA: "baseMint",
+    mintFieldB: "quoteMint",
+    vaultFieldA: "poolBaseTokenAccount",
+    vaultFieldB: "poolQuoteTokenAccount",
+  }
 };
 
 /**
