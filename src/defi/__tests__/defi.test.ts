@@ -55,18 +55,23 @@ describe("Defi raw pool fetching", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("returns one entry per known DEX, shaped with name/programId/pools", async () => {
+  it("returns one entry per known DEX, keyed by DEX name, with pools/programId", async () => {
     getProgramAccounts = vi.fn().mockResolvedValue([]);
     connection = { getProgramAccounts } as unknown as Connection;
 
     const defi = new Defi(connection);
-    const result = await defi.getPoolByTokenPair(MINT_A, MINT_B);
+    const result = await defi.getPoolsByTokenPair(MINT_A, MINT_B);
 
-    expect(result).toHaveLength(Object.keys(DEFAULT_DEX_OFFSETS).length);
-    expect(result.map((r) => r.programId).sort()).toEqual(
-      Object.keys(DEFAULT_DEX_OFFSETS).sort(),
+    expect(result).toEqual({
+      success: true,
+      message: "Pools fetched successfully",
+      result: { dexes: expect.any(Object) },
+    });
+    const dexes = result.result!.dexes;
+    expect(Object.keys(dexes).sort()).toEqual(
+      Object.values(DEFAULT_DEX_OFFSETS).map((d) => d.name).sort(),
     );
-    for (const dex of result) expect(dex.pools).toEqual([]);
+    for (const dex of Object.values(dexes)) expect(dex.pools).toEqual([]);
   });
 
   it("isolates a per-DEX failure: one DEX throwing yields [] for it, others unaffected", async () => {
@@ -87,10 +92,9 @@ describe("Defi raw pool fetching", () => {
     const defi = new Defi(connection);
     const result = await defi.getPoolsForToken(MINT_A);
 
-    const raydium = result.find((r) => r.programId === RAYDIUM_AMM_V4_PROGRAM_ID)!;
-    const meteora = result.find((r) => r.programId === METEORA_DLMM_PROGRAM_ID)!;
-    expect(raydium.pools).toHaveLength(1);
-    expect(meteora.pools).toEqual([]);
+    const dexes = result.result!.dexes;
+    expect(dexes["raydiumAmm"].pools).toHaveLength(1);
+    expect(dexes["meteoraDlmm"].pools).toEqual([]);
     expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
@@ -106,7 +110,7 @@ describe("Defi raw pool fetching", () => {
 });
 
 describe("Defi decoded pool fetching", () => {
-  it("decodes Raydium pools via the static struct without a parser attached", async () => {
+  it("decodes Raydium pools via the static struct, flattened with pubkey/lamports/_updatedAt", async () => {
     const pubkey = Keypair.generate().publicKey;
     const getProgramAccounts = vi.fn().mockImplementation(async (programId: PublicKey) => {
       if (programId.toBase58() === RAYDIUM_AMM_V4_PROGRAM_ID) {
@@ -118,13 +122,16 @@ describe("Defi decoded pool fetching", () => {
 
     const defi = new Defi(connection);
     const result = await defi.getPoolsForToken(MINT_A);
-    const raydium = result.find((r) => r.programId === RAYDIUM_AMM_V4_PROGRAM_ID)!;
+    const pool = result.result!.dexes["raydiumAmm"].pools[0];
 
-    expect(raydium.pools[0].decodedBy).toBe("static");
-    expect((raydium.pools[0].data as Record<string, unknown>).baseMint).toBeDefined();
+    expect(pool.baseMint).toBeDefined();
+    expect(pool.pubkey).toBe(pubkey.toBase58());
+    expect(typeof pool.lamports).toBe("number");
+    expect(pool).not.toHaveProperty("decodedBy");
+    expect(pool).not.toHaveProperty("dataLength");
   });
 
-  it("falls back to raw when the Raydium buffer can't be decoded", async () => {
+  it("falls back to a `data` key when the Raydium buffer can't be decoded", async () => {
     const pubkey = Keypair.generate().publicKey;
     const getProgramAccounts = vi.fn().mockImplementation(async (programId: PublicKey) => {
       if (programId.toBase58() === RAYDIUM_AMM_V4_PROGRAM_ID) {
@@ -136,13 +143,14 @@ describe("Defi decoded pool fetching", () => {
 
     const defi = new Defi(connection).enableLogging(false);
     const result = await defi.getPoolsForToken(MINT_A);
-    const raydium = result.find((r) => r.programId === RAYDIUM_AMM_V4_PROGRAM_ID)!;
+    const pool = result.result!.dexes["raydiumAmm"].pools[0];
 
-    expect(raydium.pools[0].decodedBy).toBe("raw");
-    expect(typeof raydium.pools[0].data).toBe("string");
+    expect(typeof pool.data).toBe("string");
+    expect(pool).not.toHaveProperty("decodedBy");
+    expect(pool).not.toHaveProperty("dataLength");
   });
 
-  it("decodes via the attached parser's IDL when one is registered for the program", async () => {
+  it("decodes via the attached parser's IDL, flattening the parsed fields directly", async () => {
     const pubkey = Keypair.generate().publicKey;
     const getProgramAccounts = vi.fn().mockImplementation(async (programId: PublicKey) => {
       if (programId.toBase58() === ORCA_WHIRLPOOL_PROGRAM_ID) {
@@ -161,16 +169,16 @@ describe("Defi decoded pool fetching", () => {
 
     const defi = new Defi(connection).addParser(fakeParser);
     const result = await defi.getPoolsForToken(MINT_A);
-    const orca = result.find((r) => r.programId === ORCA_WHIRLPOOL_PROGRAM_ID)!;
+    const pool = result.result!.dexes["orca"].pools[0];
 
-    expect(orca.pools[0].decodedBy).toBe("idl");
-    expect(orca.pools[0].data).toEqual({
-      accountName: "Whirlpool",
-      parsed: { token_mint_a: MINT_A },
-    });
+    expect(pool.token_mint_a).toBe(MINT_A);
+    expect(pool).not.toHaveProperty("accountName");
+    expect(pool).not.toHaveProperty("owner");
+    expect(pool).not.toHaveProperty("decodedBy");
+    expect(pool).not.toHaveProperty("dataLength");
   });
 
-  it("returns raw when no parser is attached and the program has no static decoder", async () => {
+  it("returns a `data` fallback when no parser is attached and the program has no static decoder", async () => {
     const pubkey = Keypair.generate().publicKey;
     const getProgramAccounts = vi.fn().mockImplementation(async (programId: PublicKey) => {
       if (programId.toBase58() === ORCA_WHIRLPOOL_PROGRAM_ID) {
@@ -182,9 +190,11 @@ describe("Defi decoded pool fetching", () => {
 
     const defi = new Defi(connection); // no addParser
     const result = await defi.getPoolsForToken(MINT_A);
-    const orca = result.find((r) => r.programId === ORCA_WHIRLPOOL_PROGRAM_ID)!;
+    const pool = result.result!.dexes["orca"].pools[0];
 
-    expect(orca.pools[0].decodedBy).toBe("raw");
+    expect(typeof pool.data).toBe("string");
+    expect(pool).not.toHaveProperty("decodedBy");
+    expect(pool).not.toHaveProperty("dataLength");
   });
 
   it("filters to the requested DEXes and rejects unknown DEX names", async () => {
@@ -192,13 +202,13 @@ describe("Defi decoded pool fetching", () => {
     const connection = { getProgramAccounts } as unknown as Connection;
     const defi = new Defi(connection);
 
-    await defi.getPoolByTokenPair(MINT_A, MINT_B, ["orcaWhirlpool"]);
+    await defi.getPoolsByTokenPair(MINT_A, MINT_B, ["orca"]);
     for (const call of getProgramAccounts.mock.calls) {
       expect((call[0] as PublicKey).toBase58()).toBe(ORCA_WHIRLPOOL_PROGRAM_ID);
     }
 
     // @ts-expect-error intentionally invalid DEX name
-    await expect(defi.getPoolByTokenPair(MINT_A, MINT_B, ["notADex"])).rejects.toThrow(
+    await expect(defi.getPoolsByTokenPair(MINT_A, MINT_B, ["notADex"])).rejects.toThrow(
       /Unknown DEX name/,
     );
   });

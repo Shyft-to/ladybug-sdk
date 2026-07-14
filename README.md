@@ -537,7 +537,19 @@ Please note that if the slot enquired is not available, it will start streaming 
 
 ## DeFi
 
-The `Defi` class lets you discover and decode on-chain liquidity pools across supported Solana DEXes (Raydium AMM V4, Meteora DLMM, Meteora DAMM V1, Orca Whirlpool) — find pools for a token pair or a single mint, fetch a pool by its address, and pull a pool's liquidity (mints, decimals, vault amounts, and optionally Metaplex metadata) in one call.
+The `Defi` class lets you discover and decode on-chain liquidity pools across supported Solana DEXes — find pools for a token pair or a single mint, fetch a pool by its address, and pull a pool's liquidity (mints, decimals, vault amounts, and optionally Metaplex metadata) in one call.
+
+| DEX Name | Address |
+| --- | --- |
+| meteoraAmm | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+| meteoraDlmm | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo` |
+| orca | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc` |
+| raydiumAmm | `675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8` |
+| raydiumClmm | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` |
+| raydiumCpmm | `CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C` |
+| pumpFunAmm  | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA` |
+
+\* Not yet in `DEFAULT_DEX_OFFSETS`/`SUPPORTED_DEX_NAMES` — not searched by `getPoolsByTokenPair`/`getPoolsForToken` yet, and passing them as a `dex` filter will throw `Unknown DEX name(s)`.
 
 ### Initialization
 
@@ -564,15 +576,15 @@ defi.addParser(parser);
 // attaching the parser to the Defi class
 ```
 
-### `getPoolByTokenPair`: Finding pools for a token pair
+### `getPoolsByTokenPair`: Finding pools for a token pair
 
 Searches every DEX the SDK knows for pools matching a pair of mints, and returns each pool decoded. Pass an optional third argument — an array of DEX names — to search only specific DEXes instead of all of them.
 
 ```javascript
-const pools = await defi.getPoolByTokenPair(
+const pools = await defi.getPoolsByTokenPair(
   "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo", // base mint
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // quote mint
-  ["orcaWhirlpool"], // optional: restrict the search to these DEXes
+  ["orca"], // optional: restrict the search to these DEXes
 );
 
 console.dir(pools, { depth: null });
@@ -580,11 +592,35 @@ console.dir(pools, { depth: null });
 //please note that the addresses are sample addresses, please use your own addresses
 ```
 
-`pools` is one entry per searched DEX (`{ name, programId, pools }`), each with its matching pool accounts decoded — via the parser's IDL, Raydium's static struct, or left raw if neither is available.
+`pools` is a `{ success, message, result? }` envelope. On success, `result.dexes` holds one entry per searched DEX, keyed by DEX name, each shaped as `{ pools, programId }`:
+
+```json
+{
+  "success": true,
+  "message": "Pools fetched successfully",
+  "result": {
+    "dexes": {
+      "orca": {
+        "pools": [
+          {
+            "token_mint_a": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+            "token_mint_b": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "pubkey": "22XGWL28bm2LwqP7ornMvq31jL2Mka1vvyKSNaxiCwRs",
+            "lamports": 3145920
+          }
+        ],
+        "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+      }
+    }
+  }
+}
+```
+
+Each pool's decoded fields (whatever the owning DEX's layout defines — e.g. `token_mint_a`/`token_mint_b` for Orca, `baseMint`/`quoteMint` for Raydium) are spread directly at the top level, alongside `pubkey`, `lamports`. When a pool's owning program has no static decoder and no matching IDL on the parser, its fields can't be flattened, so it falls back to a single `data` key holding the raw base64 account data instead.
 
 ### `getPoolsForToken`: Finding every pool holding a token
 
-Like `getPoolByTokenPair`, but matches a single mint in either slot of the pool — useful for finding every pool a token is traded in, across all known DEXes.
+Like `getPoolsByTokenPair`, but matches a single mint in either slot of the pool — useful for finding every pool a token is traded in, across all known DEXes. Returns the same `{ success, message, result: { dexes } }` shape.
 
 ```javascript
 const allPools = await defi.getPoolsForToken("2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo");

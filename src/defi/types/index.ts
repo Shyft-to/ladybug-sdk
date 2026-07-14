@@ -71,6 +71,47 @@ export interface DecodedDexPools {
 }
 
 /**
+ * A decoded pool account as returned to SDK consumers: decoded on-chain
+ * fields are spread directly at the top level (no `data` wrapper), alongside
+ * the account's address, balance, and fetch timestamp.
+ *
+ * `owner`/`dataLength`/`decodedBy` are omitted — `owner` is redundant with the
+ * enclosing DEX's `programId`, and the other two are internal decode-routing
+ * bookkeeping (see {@link DecodedPoolAccount}), not part of the public shape.
+ * When no decoder was available for the pool's program, the decoded fields
+ * fall back to a single `data` key holding the raw base64 account data.
+ */
+export interface PoolResult {
+  /** The pool account address. */
+  pubkey: string;
+  /** Account balance in lamports. */
+  lamports: number;
+  /** Decoded pool fields (or `data`, the raw base64, when undecoded). */
+  [field: string]: unknown;
+}
+
+/** One DEX's matching pools within a {@link PoolsFetchResult}. */
+export interface DexPoolsResult {
+  /** The matching pool accounts, decoded where possible. */
+  pools: PoolResult[];
+  /** The on-chain program that owns the pool accounts. */
+  programId: string;
+}
+
+/** Result of a multi-DEX pool search ({@link Defi.getPoolsByTokenPair}, {@link Defi.getPoolsForToken}). */
+export interface PoolsFetchResult {
+  /** Whether the search completed. A failure in one DEX doesn't fail the whole search — see `dexes`. */
+  success: boolean;
+  /** Human-readable status message. */
+  message: string;
+  /** Present only when `success` is true. */
+  result?: {
+    /** Pools found, keyed by DEX name (e.g. "raydiumAmm"). */
+    dexes: Record<string, DexPoolsResult>;
+  };
+}
+
+/**
  * One side of a pool's liquidity pair without Metaplex metadata — just the
  * mint, its decimals, and the pooled amount. Returned when `getLiquidityDetails`
  * is called with `{ includeMetadata: false }`.
@@ -124,7 +165,7 @@ export interface LiquidityDetailsResult<T = LiquidityToken> {
   result?: {
     /** The pool account address. */
     address: string;
-    /** The DEX this pool belongs to (e.g. "orcaWhirlpool"). */
+    /** The DEX this pool belongs to (e.g. "orca"). */
     dex: string;
     /** The on-chain program that owns the pool account. */
     programId: string;
@@ -146,7 +187,7 @@ export interface PoolByAddressResult {
   message: string;
   /** Present only when `success` is true. */
   result?: {
-    /** The DEX this pool belongs to (e.g. "orcaWhirlpool"). */
+    /** The DEX this pool belongs to (e.g. "orca"). */
     dex: string;
     /** The on-chain program that owns the pool account. */
     programId: string;

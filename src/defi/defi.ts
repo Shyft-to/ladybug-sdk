@@ -11,11 +11,14 @@ import { decodeLiquidityStateV4 } from "./decoders/raydium-liquidity-state-v4";
 import {
   DecodedDexPools,
   DecodedPoolAccount,
+  DexPoolsResult,
   GetLiquidityDetailsOptions,
   LiquidityAmount,
   LiquidityDetailsResult,
   LiquidityToken,
   PoolByAddressResult,
+  PoolResult,
+  PoolsFetchResult,
   RawDexPools,
   RawPoolAccount,
 } from "./types";
@@ -31,14 +34,14 @@ import { Parser } from "../parsers/parser";
  * `getProgramAccounts` with memcmp filters on the pools' token-mint offsets.
  *
  * Every DEX whose mint offsets the SDK knows (see `DEFAULT_DEX_OFFSETS`) is
- * queried automatically — no registration required. Results are returned as
- * **raw, undecoded** account data; decode the `dataBase64` yourself.
+ * queried automatically — no registration required. Pools are decoded where
+ * possible and grouped by DEX name under `result.dexes`.
  *
  * ```ts
  * const defi = new Defi(connection); // or new Defi(rpcUrl)
  *
  * // Pools for a specific pair:
- * const pairs = await defi.getPoolByTokenPair(baseMint, quoteMint);
+ * const pairs = await defi.getPoolsByTokenPair(baseMint, quoteMint);
  *
  * // Every pool holding a single token:
  * const pools = await defi.getPoolsForToken(mint);
@@ -62,7 +65,7 @@ export class Defi {
 
   /**
    * Attaches a {@link Parser} used by the decoded fetch methods
-   * ({@link getPoolByTokenPair}, {@link getPoolsForToken}).
+   * ({@link getPoolsByTokenPair}, {@link getPoolsForToken}).
    * Pools owned by a program whose IDL is registered on the parser are decoded
    * via that IDL; pools with no registered IDL (and no built-in static decoder)
    * are returned raw.
@@ -113,20 +116,26 @@ export class Defi {
    * @param baseMint - One mint of the pair.
    * @param quoteMint - The other mint of the pair.
    * @param dex - Optional subset of DEX names to search (see `SUPPORTED_DEX_NAMES`).
-   * @returns One entry per known DEX, each with its decoded pool accounts.
+   * @returns A `{ success, message, result? }` envelope; `result.dexes` holds
+   * one entry per searched DEX, keyed by DEX name, each with its decoded pools
+   * and `programId`.
    */
-  async getPoolByTokenPair(
+  async getPoolsByTokenPair(
     baseMint: string,
     quoteMint: string,
     dex?: DexName[]
-  ): Promise<DecodedDexPools[]> {
+  ): Promise<PoolsFetchResult> {
     let raw;
     if(dex) {
       raw = await this.fetchAcrossADex(baseMint, quoteMint, dex);
     } else {
       raw = await this.fetchAcrossDexes(baseMint, quoteMint);
     }
-    return raw.map((dex) => this.decodeDexPools(dex));
+    return {
+      success: true,
+      message: "Pools fetched successfully",
+      result: { dexes: this.toDexesResult(raw.map((dex) => this.decodeDexPools(dex))) },
+    };
   }
 
   /**
@@ -137,11 +146,17 @@ export class Defi {
    * registered IDL are returned raw.
    *
    * @param mint - The token mint to search for.
-   * @returns One entry per known DEX, each with its decoded pool accounts.
+   * @returns A `{ success, message, result? }` envelope; `result.dexes` holds
+   * one entry per searched DEX, keyed by DEX name, each with its decoded pools
+   * and `programId`.
    */
-  async getPoolsForToken(mint: string): Promise<DecodedDexPools[]> {
+  async getPoolsForToken(mint: string): Promise<PoolsFetchResult> {
     const raw = await this.fetchAcrossDexes(mint);
-    return raw.map((dex) => this.decodeDexPools(dex));
+    return {
+      success: true,
+      message: "Pools fetched successfully",
+      result: { dexes: this.toDexesResult(raw.map((dex) => this.decodeDexPools(dex))) },
+    };
   }
 
   /**
@@ -152,7 +167,9 @@ export class Defi {
    *
    * @param address - The pool account address.
    * @returns A `{ success, message, result? }` envelope; `result` (with `dex`,
-   * `programId`, and decoded `poolInfo`) is present only on success.
+   * `programId`, and decoded `poolInfo`) is present only on success. `poolInfo`
+   * is the decoded fields directly (IDL decodes' `accountName` wrapper is
+   * dropped) — never the raw `{ accountName, parsed }` shape.
    */
   async getPoolsByAddress(address: string): Promise<PoolByAddressResult> {
     const resolved = await this.decodeAccountByAddress(address);
@@ -166,7 +183,7 @@ export class Defi {
       result: {
         dex: DEFAULT_DEX_OFFSETS[resolved.programId]?.name ?? "unknown",
         programId: resolved.programId,
-        poolInfo: resolved.decoded.data,
+        poolInfo: this.extractParsedFields(resolved.decoded),
       },
     };
   }
@@ -389,6 +406,39 @@ export class Defi {
     );
 
     return { name: dex.name, programId: dex.programId, pools };
+  }
+
+  /** Builds the `dexes` map (keyed by DEX name) returned to callers. */
+  private toDexesResult(decodedDexes: DecodedDexPools[]): Record<string, DexPoolsResult> {
+    const dexes: Record<string, DexPoolsResult> = {};
+    for (const dex of decodedDexes) {
+      dexes[dex.name] = {
+        pools: dex.pools.map((pool) => this.toPoolResult(pool)),
+        programId: dex.programId,
+      };
+    }
+    return dexes;
+  }
+
+  /**
+   * Flattens a decoded pool's fields to the top level and strips internal
+   * decode-routing bookkeeping (`owner`, `dataLength`, `decodedBy`) before it's
+   * handed back to the caller. Pools with no decoder available (`decodedBy`
+   * `"raw"`) can't be flattened — their base64 data is kept under a `data` key.
+   */
+  private toPoolResult(pool: DecodedPoolAccount): PoolResult {
+    const fields =
+      pool.decodedBy === "idl"
+        ? (pool.data as { parsed?: Record<string, unknown> }).parsed ?? {}
+        : pool.decodedBy === "static"
+          ? (pool.data as Record<string, unknown>)
+          : { data: pool.data };
+
+    return {
+      ...fields,
+      pubkey: pool.pubkey,
+      lamports: pool.lamports
+    };
   }
 
   /** Decodes one raw pool account, falling back to raw on any failure. */

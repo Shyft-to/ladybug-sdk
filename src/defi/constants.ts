@@ -16,18 +16,18 @@ export const METEORA_DLMM_TOKEN_X_MINT_OFFSET = 88;
 export const METEORA_DLMM_TOKEN_Y_MINT_OFFSET = 120;
 
 // ─── Meteora DAMM V1 ────────────────────────────────────────────────────────
-export const METEORA_DAMM_V1_PROGRAM_ID = "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB";
-export const METEORA_DAMM_V1_TOKEN_A_MINT_OFFSET = 40;
-export const METEORA_DAMM_V1_TOKEN_B_MINT_OFFSET = 72;
+export const METEORA_AMM_PROGRAM_ID = "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB";
+export const METEORA_AMM_TOKEN_A_MINT_OFFSET = 40;
+export const METEORA_AMM_TOKEN_B_MINT_OFFSET = 72;
 
 // ─── Orca Whirlpool ─────────────────────────────────────────────────────────
 export const ORCA_WHIRLPOOL_PROGRAM_ID = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
 export const ORCA_WHIRLPOOL_TOKEN_A_MINT_OFFSET = 101;
 export const ORCA_WHIRLPOOL_TOKEN_B_MINT_OFFSET = 181;
 
-export const RAYDIUM_CAMM_PROGRAM_ID = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
-export const RAYDIUM_CAMM_TOKEN_MINT_0_OFFSET = 73;
-export const RAYDIUM_CAMM_TOKEN_MINT_1_OFFSET = 105;
+export const RAYDIUM_CLMM_PROGRAM_ID = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
+export const RAYDIUM_CLMM_TOKEN_MINT_0_OFFSET = 73;
+export const RAYDIUM_CLMM_TOKEN_MINT_1_OFFSET = 105;
 
 export const RAYDIUM_CPMM_PROGRAM_ID = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C";
 export const RAYDIUM_CPMM_TOKEN_MINT_0_OFFSET = 168;
@@ -94,18 +94,20 @@ export const DEFAULT_DEX_OFFSETS: Record<string, DexOffsetDefaults> = {
     vaultFieldA: "reserve_x",
     vaultFieldB: "reserve_y",
   },
-  [METEORA_DAMM_V1_PROGRAM_ID]: {
-    name: "meteoraDammV1",
-    offsetA: METEORA_DAMM_V1_TOKEN_A_MINT_OFFSET,
-    offsetB: METEORA_DAMM_V1_TOKEN_B_MINT_OFFSET,
+  [METEORA_AMM_PROGRAM_ID]: {
+    name: "meteoraAmm",
+    offsetA: METEORA_AMM_TOKEN_A_MINT_OFFSET,
+    offsetB: METEORA_AMM_TOKEN_B_MINT_OFFSET,
     accountName: "Pool",
     mintFieldA: "tokenAMint",
     mintFieldB: "tokenBMint",
+    vaultFieldA: "aVault",
+    vaultFieldB: "bVault",
     // aVault/bVault are Mercurial vault-program accounts, not token accounts,
     // so the pooled amount isn't a simple token-account balance here.
   },
   [ORCA_WHIRLPOOL_PROGRAM_ID]: {
-    name: "orcaWhirlpool",
+    name: "orca",
     offsetA: ORCA_WHIRLPOOL_TOKEN_A_MINT_OFFSET,
     offsetB: ORCA_WHIRLPOOL_TOKEN_B_MINT_OFFSET,
     accountName: "Whirlpool",
@@ -114,48 +116,51 @@ export const DEFAULT_DEX_OFFSETS: Record<string, DexOffsetDefaults> = {
     vaultFieldA: "token_vault_a",
     vaultFieldB: "token_vault_b",
   },
-  [RAYDIUM_CAMM_PROGRAM_ID]: {
-    name: "raydiumCamm",
-    offsetA: RAYDIUM_CAMM_TOKEN_MINT_0_OFFSET,
-    offsetB: RAYDIUM_CAMM_TOKEN_MINT_1_OFFSET,
+  [RAYDIUM_CLMM_PROGRAM_ID]: {
+    name: "raydiumClmm",
+    offsetA: RAYDIUM_CLMM_TOKEN_MINT_0_OFFSET,
+    offsetB: RAYDIUM_CLMM_TOKEN_MINT_1_OFFSET,
     accountName: "PoolState",
-    mintFieldA: "tokenMint0",
-    mintFieldB: "tokenMint1",
-    vaultFieldA: "tokenVault0",
-    vaultFieldB: "tokenVault1",
+    mintFieldA: "token_mint_0",
+    mintFieldB: "token_mint_1",
+    vaultFieldA: "token_vault_0",
+    vaultFieldB: "token_vault_1",
   },
   [RAYDIUM_CPMM_PROGRAM_ID]: {
     name: "raydiumCpmm",
     offsetA: RAYDIUM_CPMM_TOKEN_MINT_0_OFFSET,
     offsetB: RAYDIUM_CPMM_TOKEN_MINT_1_OFFSET,
     accountName: "PoolState",
-    mintFieldA: "token0Mint",
-    mintFieldB: "token1Mint",
-    vaultFieldA: "token0Vault",
-    vaultFieldB: "token1Vault",
+    mintFieldA: "token_0_mint",
+    mintFieldB: "token_1_mint",
+    vaultFieldA: "token_0_vault",
+    vaultFieldB: "token_1_vault",
   },
   [PUMP_AMM_PROGRAM_ID]: {
-    name: "pumpAmm",
+    name: "pumpFunAmm",
     offsetA: PUMP_AMM_BASE_MINT_OFFSET,
     offsetB: PUMP_AMM_QUOTE_MINT_OFFSET,
     accountName: "Pool",
-    mintFieldA: "baseMint",
-    mintFieldB: "quoteMint",
-    vaultFieldA: "poolBaseTokenAccount",
-    vaultFieldB: "poolQuoteTokenAccount",
+    mintFieldA: "base_mint",
+    mintFieldB: "quote_mint",
+    vaultFieldA: "pool_base_token_account",
+    vaultFieldB: "pool_quote_token_account",
   }
 };
 
 /**
  * The friendly names of every DEX the SDK supports, in `DEFAULT_DEX_OFFSETS`
- * order. Use these to filter lookups (e.g. `getPoolsForToken(mint, ["orcaWhirlpool"])`)
+ * order. Use these to filter lookups (e.g. `getPoolsByTokenPair(baseMint, quoteMint, ["orca"])`)
  * and to validate/suggest names. Kept as a source of truth for {@link DexName}.
  */
 export const SUPPORTED_DEX_NAMES = [
   "raydiumAmm",
   "meteoraDlmm",
-  "meteoraDammV1",
-  "orcaWhirlpool",
+  "meteoraAmm",
+  "orca",
+  "raydiumClmm",
+  "raydiumCpmm",
+  "pumpFunAmm",
 ] as const;
 
 /** A supported DEX name (see {@link SUPPORTED_DEX_NAMES}). */
