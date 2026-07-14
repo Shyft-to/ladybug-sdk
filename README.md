@@ -535,6 +535,137 @@ txnStreamer.start();
 Please note that if the slot enquired is not available, it will start streaming from the current slot.
 
 
+## DeFi
+
+The `Defi` class lets you discover and decode on-chain liquidity pools across supported Solana DEXes — find pools for a token pair or a single mint, fetch a pool by its address, and pull a pool's liquidity (mints, decimals, vault amounts, and optionally Metaplex metadata) in one call.
+
+| DEX Name | Address |
+| --- | --- |
+| meteoraAmm | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+| meteoraDlmm | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo` |
+| orca | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc` |
+| raydiumAmm | `675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8` |
+| raydiumClmm | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` |
+| raydiumCpmm | `CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C` |
+| pumpFunAmm  | `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA` |
+
+\* Not yet in `DEFAULT_DEX_OFFSETS`/`SUPPORTED_DEX_NAMES` — not searched by `getPoolsByTokenPair`/`getPoolsForToken` yet, and passing them as a `dex` filter will throw `Unknown DEX name(s)`.
+
+### Initialization
+
+`Defi` takes a `Connection` (or an RPC URL) and, optionally, a `Parser` with IDLs registered for the DEXes you want decoded. Raydium AMM V4 is always decoded via a built-in static struct, even without a parser attached; every other DEX needs its IDL registered on the parser to be decoded, otherwise its pools are returned raw.
+
+```javascript
+import { Connection, PublicKey } from "@solana/web3.js";
+import { Defi, Parser } from "@shyft-to/ladybug-sdk";
+import lbuIdl from "./meteora_dlmm.json";
+import whirlpoolIdl from "./whirlpool.json";
+import clmmIdl from "./clmm_0.0.1.json";
+
+const connection = new Connection("https://rpc.shyft.to?api_key=YOUR-KEY");
+//you can use your RPC url
+
+const parser = new Parser();
+parser.addIDL(new PublicKey("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"), lbuIdl as Idl);
+parser.addIDL(new PublicKey("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"), whirlpoolIdl as Idl);
+parser.addIDL(new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), clmmIdl as Idl);
+// registering IDLs for the DEXes we want decoded pools from
+
+const defi = new Defi(connection);
+defi.addParser(parser);
+// attaching the parser to the Defi class
+```
+
+### `getPoolsByTokenPair`: Finding pools for a token pair
+
+Searches every DEX the SDK knows for pools matching a pair of mints, and returns each pool decoded. Pass an optional third argument — an array of DEX names — to search only specific DEXes instead of all of them.
+
+```javascript
+const pools = await defi.getPoolsByTokenPair(
+  "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo", // base mint
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // quote mint
+  ["orca"], // optional: restrict the search to these DEXes
+);
+
+console.dir(pools, { depth: null });
+
+//please note that the addresses are sample addresses, please use your own addresses
+```
+
+`pools` is a `{ success, message, result? }` envelope. On success, `result.dexes` holds one entry per searched DEX, keyed by DEX name, each shaped as `{ pools, programId }`:
+
+```json
+{
+  "success": true,
+  "message": "Pools fetched successfully",
+  "result": {
+    "dexes": {
+      "orca": {
+        "pools": [
+          {
+            "token_mint_a": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+            "token_mint_b": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "pubkey": "22XGWL28bm2LwqP7ornMvq31jL2Mka1vvyKSNaxiCwRs",
+            "lamports": 3145920
+          }
+        ],
+        "programId": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+      }
+    }
+  }
+}
+```
+
+Each pool's decoded fields (whatever the owning DEX's layout defines — e.g. `token_mint_a`/`token_mint_b` for Orca, `baseMint`/`quoteMint` for Raydium) are spread directly at the top level, alongside `pubkey`, `lamports`. When a pool's owning program has no static decoder and no matching IDL on the parser, its fields can't be flattened, so it falls back to a single `data` key holding the raw base64 account data instead.
+
+### `getPoolsForToken`: Finding every pool holding a token
+
+Like `getPoolsByTokenPair`, but matches a single mint in either slot of the pool — useful for finding every pool a token is traded in, across all known DEXes. Returns the same `{ success, message, result: { dexes } }` shape.
+
+```javascript
+const allPools = await defi.getPoolsForToken("2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo");
+
+console.dir(allPools, { depth: null });
+```
+
+### `getPoolsByAddress`: Fetching and decoding a single pool
+
+Fetches one pool account directly by its address, resolves the owning DEX from the account's owner program, and decodes it.
+
+```javascript
+const poolDetails = await defi.getPoolsByAddress("22XGWL28bm2LwqP7ornMvq31jL2Mka1vvyKSNaxiCwRs");
+
+console.dir(poolDetails, { depth: null });
+```
+
+`poolDetails` is a `{ success, message, result? }` envelope; on success, `result` contains the resolved `dex` name, `programId`, and decoded `poolInfo`. If the address is invalid, the account doesn't exist, or no parser/decoder is available for its owning program, `success` is `false` and `message` explains why.
+
+### `getLiquidityDetails`: Reading a pool's liquidity pair
+
+Fetches a pool by address, decodes it, and resolves both sides of its liquidity pair — token mint, decimals, and the pooled `amount` read from the reserve vault. By default it also fetches Metaplex metadata (`name`, `symbol`, `imageUri`) for each token; pass `{ includeMetadata: false }` to skip that and save an RPC round-trip per token.
+
+```javascript
+const liquidity = await defi.getLiquidityDetails(
+  "BZa87AscZf5EGLAksPfZbnd6FmEPts9rfcGRUA2QbrXQ",
+  { includeMetadata: false },
+);
+
+console.dir(liquidity, { depth: null });
+```
+
+```javascript
+// with metadata (default)
+const liquidityWithMetadata = await defi.getLiquidityDetails(
+  "BZa87AscZf5EGLAksPfZbnd6FmEPts9rfcGRUA2QbrXQ",
+);
+
+console.dir(liquidityWithMetadata, { depth: null });
+```
+
+Like `getPoolsByAddress`, this returns a `{ success, message, result? }` envelope. On success, `result.liquidity.tokenA`/`tokenB` each hold `address`, `decimals`, and `amount` (plus `name`, `symbol`, and `imageUri` when `includeMetadata` isn't disabled).
+
+
+
 ## Latency Checker
 
 The `LatencyChecker` class provides a dedicated mechanism for benchmarking the speed of data delivery from a Solana gRPC endpoint to a consuming application. It subscribes to specific programs, captures both Transaction Status and Block Meta updates, and correlates them to calculate the observed latency.
@@ -579,6 +710,7 @@ async function runBasicCheck() {
 
 runBasicCheck().catch(console.error);
 ```
+
 
 ## About Us
 
